@@ -1,0 +1,831 @@
+---
+title: "Screen time reporting text analysis"
+author: "Douglas A. Parry"
+output: html_notebook
+---
+
+############## Section 0: READ ME ############## 
+
+This file contains the code for cleaning, processing and analysing the  text data.
+
+The code was written in R version 4.0.5 using RMarkdown (available at: http://rmarkdown.rstudio.com/). 
+It is recommended that this file be downloaded and viewed in RStudio to view the output of the code.
+
+############## Section 1: Setup ############## 
+
+# Load packages, clear environment, set seed, and turn scientific notation off
+```{r setup, message=FALSE, warning=FALSE}
+# clear the environment, set the seed, turn scientific notation off
+rm(list = ls())
+options(scipen = 999)
+set.seed(42)
+
+# load packages
+
+if (!require("pacman")) install.packages("pacman");
+library(pacman)
+pacman::p_load(tidyverse, dplyr, ggplot2, ggforce, tidytext, textdata, tokenizers, stringr, readxl, 
+               forcats, tm, topicmodels, lubridate, ldatuning, sentimentr, textclean,
+               PupillometryR, scales, udpipe)
+
+# Create expected directory structure:
+
+wd <- getwd()
+if (!dir.exists("data_clean")) {dir.create(file.path(wd, "data_clean"))}
+if (!dir.exists("data_raw")) {dir.create(file.path(wd, "data_raw"))}
+if (!dir.exists("figures")) {dir.create(file.path(wd, "figures"))}
+```
+
+############## Section 2: Data Processing ############## 
+
+# Import and transform raw data (from data_raw folder)
+```{r}
+raw_data <-read_excel("data_raw/data.xlsx", na="NA",  #renamed to data
+                      col_types = c("text", "text", "date", "date",  #changed from "text" to "date" for date columns -juan
+                                    "text", "text", "text","text"))
+raw_data <- raw_data %>% 
+  filter(!is.na(Text_Content)) %>% 
+  filter(!is.na(Title))#remove any rows for which there is no article text
+```
+
+# Sort out column data types and add article ID
+
+NB: check that the date_published column is formatted correctly and isn't a text/number column as this has caused issues
+```{r}
+raw_data<- raw_data %>% 
+  mutate(website_category = factor(website_category),  #changed to website category
+         Outlet_Name = factor(Outlet_Name))%>% 
+        # website_category = factor(Outlet_Name))
+  rowid_to_column("ID")
+```
+
+```{r}
+initial_clean_data <- raw_data
+rm(raw_data)
+```
+
+# Data Cleaning
+Note: many texts use "screen time" with a space, this uses a regex to combine these into a single word "screentime".
+This code removes all numbers from the text and turns "screen time" into "screentime"
+
+```{r}
+initial_clean_data <- initial_clean_data %>%
+  mutate(Text_Content = gsub(x = Text_Content, 
+                             pattern = "[0-9]+", 
+                             replacement = ""),
+         Text_Content = gsub(x = Text_Content, 
+                             pattern = "screen time", 
+                             replacement = "screentime"))
+
+initial_clean_data <- initial_clean_data %>% 
+  mutate(Date_Published = ymd(Date_Published), #frm lubridate  #changed to ymd - juan
+         week = floor_date(Date_Published, "week"),
+         year = year(Date_Published))
+
+saveRDS(initial_clean_data, "data_clean/clean_data_1.rds")
+```
+
+# Descriptive statistics
+
+Number of articles included
+```{r}
+initial_clean_data %>% 
+  tally()
+```
+Number of articles included by year
+```{r}
+initial_clean_data %>%
+group_by(year) %>%
+# split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
+tally(sort=TRUE) %>%
+mutate(freq = round((n / sum(n)) * 100,2))
+
+```
+
+Number of articles before WHO announcement vs after announcement
+```{r}
+initial_clean_data %>%
+filter(Date_Published<as.Date("2020-03-11")) %>%
+group_by(year) %>%
+# split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
+tally(sort=TRUE) %>%
+mutate(total = (sum(n)))
+
+
+
+initial_clean_data %>%
+filter(Date_Published>as.Date("2020-03-10")) %>%
+group_by(year) %>%
+# split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
+tally(sort=TRUE) %>%
+mutate(total = (sum(n)))
+
+
+
+```
+
+Number of articles included by website category
+```{r}
+initial_clean_data %>% 
+  group_by(website_category) %>% 
+ # split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>% 
+  tally(sort=TRUE) %>% 
+  mutate(freq = round((n / sum(n)) * 100,2))
+
+
+
+```
+
+Average number of articles per media house
+```{r}
+outlet_count <- initial_clean_data %>% 
+  group_by(Outlet_Name) %>% 
+ # split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>% 
+  tally(sort=TRUE) %>% 
+  mutate(freq = round((n / sum(n)) * 100,2))
+
+```
+
+Descriptive statistics for articles per media house
+```{r}
+outlet_count %>%  summarise(mean = mean(n),
+            sd = sd(n),
+            median = median(n),
+            min = min(n),
+            max = max(n))
+
+```
+
+Visualisation of number of articles over time, with a dotted line at the date The WHO declared a pandemic.
+```{r}
+initial_clean_data %>% 
+  group_by(week) %>%  #note in figure that it is grouped by week
+  tally() %>% 
+  ggplot(aes(x = as.Date(week), y = n)) +
+  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4)+
+  geom_line() +
+  scale_x_date(labels = date_format("%m-%Y"))+
+  labs(x = "Date", y = "Number of published articles",
+       title = "Number of published articles per week")+
+  theme_minimal()
+```
+
+############## Section 3: Sentiment Analysis ############## 
+
+Sentiment analysis is performed using the `sentimentr` package. 
+This package analyses sentiment at a sentence level rather than a word level. 
+The analysis also incorporates valence shifters.
+        
+## tokenise into sentences for descriptive analysis and cleaning
+
+```{r}
+data_sentences <- initial_clean_data %>% 
+   unnest_tokens(sentence, Text_Content, token = "sentences")
+```
+
+### number of sentences per article
+Look through and see if there is anything weird (very few sentences in an article) and go and see if it needs manual fixing
+```{r}
+article_sentences <- data_sentences %>% 
+  group_by(ID) %>% 
+  tally()
+
+article_sentences
+```
+### Descriptive statistics for number of sentences
+
+*We can consider grouping by outlet or outlet type to make a table of this* (would need to join back the rest of the data)
+
+If there are any outliers here (like articles with 1 or 2 sentences) go check which ID and see what is going on and fix if need be.
+  For instance the article titled: The Debate Over Screens and Health is More Contentious Than Ever (Heid) shows up here as only 2 sentences - looking in the data collection spreadsheet, there are clearly many more sentences but these are dropped at some point (perhaps it is to big to fit in a single cell?) and is dropped when we remove NAs - something to figure out and bring in.. and check if there are any similar.
+```{r}
+article_sentences %>% 
+  summarise(mean = mean(n),
+            sd = sd(n),
+            median = median(n),
+            min = min(n),
+            max = max(n))
+```
+
+Descriptive statistics for number of words per article 
+
+```{r}
+words_per_article<-initial_clean_data %>%
+  select(ID, Text_Content) %>% 
+  unnest_tokens("word",Text_Content) %>% 
+  count(ID)
+
+words_per_article
+
+```
+
+Descriptive statistics for words per article
+```{r}
+
+words_per_article %>%  summarise(mean = mean(n),
+            sd = sd(n),
+            median = median(n),
+            min = min(n),
+            max = max(n))
+
+```
+
+BONUS: Twenge and Orben mentions
+```{r}
+initial_clean_data %>% 
+  filter(grepl("Orben", Text_Content)) %>% 
+  filter(!grepl("Twenge", Text_Content)) %>% 
+  count("ID")
+
+initial_clean_data %>% 
+  filter(grepl("Twenge", Text_Content))%>% 
+  filter(!grepl("Orben", Text_Content)) %>% 
+  count("ID")
+
+initial_clean_data %>% 
+  filter(grepl("Przybylski", Text_Content)) %>% 
+  count("ID")
+
+initial_clean_data %>% 
+  filter(grepl("Twenge", Text_Content)) %>% 
+  filter(grepl("Orben", Text_Content)) %>% 
+  count("ID")
+
+```
+
+
+### Sentiment analysis
+
+Tokenise into sentences and perform sentiment analysis, and aggregate to the article level (by ID).
+(see page 46 and 47 of https://cran.r-project.org/web/packages/sentimentr/sentimentr.pdf for more details)
+
+- Uses the Jockers-Rinker lexicon from the lexicon package (there are other options to consider but this is good).
+- Uses the valence shifters dictionary from the lexicon package.
+- Uses an amplifier weight of 2 (the default is 0.8). This value will multiply the polarized terms by 1 + this value. Sentiment tends to converge around neutral sentiment when aggregated.
+- The window for valence shifters is set to 3 before and 3 after a word.
+- The question weight is set to 0. It ranges from 0 to 1. Default is 1. A 0 corresponds with the belief that questions (pure questions) are not polarized. 
+- Adversative weight was retained at the default and not downweighted. An adversative conjunction overrules the previous clause containing a polarized word (e.g., “I like it but it’s not worth it.”
+- Set to detect the neutral non-verb word like.
+
+note the above decisions (see Cornelissen et al. for a similar write up)
+
+*another option we can consider is the distribution/proportion of neg/pos sentences in an article* (see later)
+
+```{r}
+articles_with_sentiment <- initial_clean_data %>%
+  get_sentences(.$Text_Content) %>% 
+  sentiment_by(.$ID, 
+               polarity_dt = lexicon::hash_sentiment_jockers_rinker,
+               valence_shifters_dt = lexicon::hash_valence_shifters,
+               amplifier.weight = 2,
+               n.before = 3, n.after = 3,
+               question.weight = 0,
+               neutral.nonverb.like = TRUE)
+
+articles_with_sentiment
+```
+
+Visualise sentiment distribution
+
+```{r}
+articles_with_sentiment %>% 
+  ggplot(aes(x = ave_sentiment))+
+  geom_density() + 
+  theme_minimal()
+```
+
+### Bring back the rest of the data
+
+```{r}
+data_with_sentiment <- articles_with_sentiment %>% 
+  left_join(initial_clean_data, by = c("by" = "ID")) %>% 
+  rename(ID = by)
+
+data_with_sentiment
+```
+## Descriptive analysis of sentiment by (either outlet or outlet category)
+```{r}
+data_with_sentiment %>% 
+  group_by(Outlet_Name) %>% 
+  summarise(mean = mean(ave_sentiment),
+            sd = sd(ave_sentiment),
+            median = median(ave_sentiment),
+            min = min(ave_sentiment),
+            max = max(ave_sentiment),
+            n = n())
+```
+
+## Visualisation of sentiment (will probably adjust to outlet category rather than outlet)
+Only plots for those outlets with 4 or more articles included
+
+```{r}
+data_with_sentiment %>% 
+  group_by(Outlet_Name) %>% 
+  add_count(Outlet_Name) %>% 
+  filter(n > 4) %>% 
+ ggplot(aes(x = fct_reorder(website_category, ave_sentiment), y = ave_sentiment)) +
+  geom_hline(yintercept=0, linetype=4)+
+  geom_boxplot(width = .4, 
+               guides = FALSE, 
+               outlier.shape = NA) +
+  geom_point(aes(y = ave_sentiment), 
+             position = position_jitter(width = .1), 
+             size = 1, alpha = 0.8) + 
+  guides(fill = "none") +
+  labs(x = "Media House", y = "Sentiment", title = "Sentiment by website category", subtitle = "")+
+  coord_flip()+
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
+```
+Popular news media outlets
+
+```{r}
+data_with_sentiment %>% 
+  group_by(Outlet_Name) %>%
+  filter(website_category=="Popular news media") %>% 
+  add_count(Outlet_Name) %>% 
+ ggplot(aes(x = fct_reorder(Outlet_Name, ave_sentiment), y = ave_sentiment)) +
+  geom_hline(yintercept=0, linetype=4)+
+  geom_boxplot(width = .4, 
+               guides = FALSE, 
+               outlier.shape = NA) +
+  geom_point(aes(y = ave_sentiment), 
+             position = position_jitter(width = .1), 
+             size = 1, alpha = 0.8) + 
+  guides(fill = "none") +
+  labs(x = "Media House", y = "Sentiment", title = "Sentiment by popular news media outlets", subtitle = "")+
+  coord_flip()+
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
+```
+
+## Descriptive analysis of sentiment by data published
+
+```{r}
+data_with_sentiment %>% select(website_category, ave_sentiment, week) %>% 
+  group_by(week) %>%  
+  summarise(mean_sentiment = mean(ave_sentiment)) %>% 
+  mutate(line_color = mean_sentiment < 0) %>% 
+  ggplot(mapping = aes(x = week, y = mean_sentiment)) +
+  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4)+
+  #geom_line() +
+  geom_link2(aes(colour = after_stat(ifelse(y > 0, "positve", "negative"))))+
+  scale_x_date(labels = date_format("%m-%Y"))+
+  labs(x = "Date", y = "Mean sentiment",
+       title = "Mean sentiment of articles per week", 
+       color = "Sentiment")+
+  theme_minimal()
+
+```
+
+```{r}
+data_with_sentiment_facet<-data_with_sentiment %>% select(website_category, ave_sentiment, week) %>% 
+  group_by(week) %>%  
+  summarise(mean_sentiment = mean(ave_sentiment)) %>% 
+  left_join(data_with_sentiment, by = "week") 
+
+ 
+  data_with_sentiment_facet %>% 
+  mutate(line_color = mean_sentiment < 0) %>% 
+  ggplot(mapping = aes(x = Date_Published, y = mean_sentiment)) +
+  geom_link2(aes(colour = after_stat(ifelse(y > 0, "positve", "negative"))))+
+  facet_wrap(~website_category)
+
+data_with_sentiment_facet
+
+```
+Sentiment analysis: Articles mentioning Twenge vs Orben
+
+```{r}
+data_with_sentiment_orben<-data_with_sentiment %>% 
+  filter(grepl("Orben", Text_Content)) %>% 
+  filter(!grepl("Twenge", Text_Content))
+
+ mean(data_with_sentiment_orben$ave_sentiment)
+
+data_with_sentiment_twenge<-data_with_sentiment %>% 
+  filter(grepl("Twenge", Text_Content))%>% 
+  filter(!grepl("Orben", Text_Content))
+
+ mean(data_with_sentiment_twenge$ave_sentiment)
+
+
+#initial_clean_data_przy<-data_with_sentiment %>% 
+#  filter(grepl("Przybylski", Text_Content))
+
+data_with_sentiment_orbentwenge<-data_with_sentiment %>% 
+  filter(grepl("Twenge", Text_Content)) %>% 
+  filter(grepl("Orben", Text_Content))
+
+ mean(data_with_sentiment_orbentwenge$ave_sentiment)
+
+```
+
+
+```{r}
+data_with_sentiment_facet<-data_with_sentiment %>% select(website_category, ave_sentiment, week) %>% 
+  group_by(week) %>%  
+  summarise(mean_sentiment = mean(ave_sentiment)) %>% 
+  left_join(data_with_sentiment, by = "week") %>% 
+  filter(mean_sentiment<0, website_category=="Popular news media")
+
+ 
+  data_with_sentiment_facet %>% 
+  mutate(line_color = mean_sentiment < 0) %>% 
+  ggplot(mapping = aes(x = week, y = mean_sentiment)) +
+  geom_line()
+
+```
+
+Can also consider the proportion of negative, neutral, and positive sentences in an article (i.e., run sentiment by sentence but don't aggregate, do that manually and set thresholds for neg/neutral/pos)
+
+
+```{r}
+sentences <- initial_clean_data %>%
+  get_sentences(.$Text_Content) %>% 
+  rowid_to_column("sentence_num")
+
+sentence_level_sentiment_with_data <- initial_clean_data %>%
+  get_sentences(.$Text_Content) %>% 
+  rowid_to_column("sentence_num") %>% 
+  sentiment_by(.$sentence_num,  
+               polarity_dt = lexicon::hash_sentiment_jockers_rinker,
+               valence_shifters_dt = lexicon::hash_valence_shifters,
+               amplifier.weight = 2,
+               n.before = 3, n.after = 3,
+               question.weight = 0,
+               neutral.nonverb.like = TRUE) %>% 
+  left_join(sentences, by =c("by" = "sentence_num"))
+
+sentence_level_sentiment_with_data
+```
+
+Sentence level sentiment comparison
+```{r}
+sentence_level_sentiment_with_data_counts <- sentence_level_sentiment_with_data %>% 
+  group_by(ID) %>% 
+  mutate(pos = sum(ave_sentiment > 0),
+         neg = sum(ave_sentiment < 0),
+         diff = pos - neg) %>% #what about neutral can set some cutoffs?
+  summarise(n_pos = mean(pos),
+            n_neg = mean(neg),
+            diff = mean(diff))
+  
+sentence_level_sentiment_with_data_counts
+```
+
+```{r}
+sentence_level_sentiment_with_data_counts %>% 
+  left_join(initial_clean_data, by = "ID") %>% 
+  group_by(Outlet_Name) %>% 
+  summarise(n = n(),
+            mean_pos = mean(n_pos),
+            mean_n_neg = mean(n_neg),
+            mean_diff = mean(diff)) %>% #will also need to get SDs
+  arrange(desc(mean_diff))
+```
+Positive and negative sentiment by categories
+```{r}
+sentence_level_sentiment_with_data_counts <- sentence_level_sentiment_with_data %>% 
+  group_by(website_category) %>% 
+  mutate(pos = sum(ave_sentiment > 0),
+         neg = sum(ave_sentiment < 0),
+         diff = pos - neg) %>% #what about neutral can set some cutoffs?
+  summarise(n_pos = mean(pos),
+            n_neg = mean(neg),
+            diff = mean(diff))
+  
+sentence_level_sentiment_with_data_counts
+```
+
+#CHANGE: Article level, not sentence level
+Top 5 positive and negative sentiment outlets
+```{r}
+sentence_level_sentiment_with_data_counts <- sentence_level_sentiment_with_data %>% 
+  group_by(Outlet_Name) %>% 
+  mutate(pos = sum(ave_sentiment > 0),
+         neg = sum(ave_sentiment < 0),
+         diff = pos - neg) %>% #what about neutral can set some cutoffs?
+  summarise(n_pos = mean(pos),
+            n_neg = mean(neg),
+            diff = mean(diff))
+
+sentence_level_sentiment_with_data_counts<-sentence_level_sentiment_with_data_counts %>% 
+  left_join(outlet_count, by = "Outlet_Name") %>%  filter(n>4)
+
+sentence_level_sentiment_with_data_counts
+
+sentence_level_sentiment_with_data_counts_top5<-sentence_level_sentiment_with_data_counts %>% arrange(desc(diff)) %>%
+    slice(1:5)
+sentence_level_sentiment_with_data_counts_bottom5<-sentence_level_sentiment_with_data_counts %>% arrange(diff)%>%
+    slice(1:5) 
+
+sentence_level_sentiment_with_data_counts_top<- rbind(sentence_level_sentiment_with_data_counts_top5, sentence_level_sentiment_with_data_counts_bottom5)
+
+sentence_level_sentiment_with_data_counts_top
+
+```
+
+############## Section 4: Topic Modeling ############## 
+
+First use the `udpipe` package to clean the data.
+
+Load the English language model with `udpipe`
+```{r}
+english_language_model <- udpipe_load_model(file = "english-ewt-ud-2.5-191206.udpipe")
+```
+
+```{r}
+data_with_sentiment <- data_with_sentiment %>%
+  mutate(Text_Content = gsub(x = Text_Content, pattern = "[0-9]+", replacement = ""),
+         Text_Content = gsub(x = Text_Content, pattern = "\\%", replacement = ""),
+         Text_Content = gsub(x = Text_Content, pattern = "\\sad\\s|\\sads\\s", replacement = "")) 
+```
+
+```{r}
+data_with_sentiment_tokenised <- as.data.frame(udpipe_annotate(english_language_model,
+                                                             x=data_with_sentiment$Text_Content,
+                                                             doc_id = data_with_sentiment$ID,
+                                                             tokenizer = "tokenizer",
+                                                             tagger = c("default", "none"),
+                                                             parser = "none",
+                                                             trace=TRUE))
+
+data_with_sentiment_tokenised
+```
+
+only words tagged with NN (noun, singular or mass), NNS (noun, plural), NNP (proper noun, singular), NNPS (proper noun, plural) and JJ (adjective) were retained. 
+https://cran.r-project.org/web/packages/udpipe/vignettes/udpipe-usecase-topicmodelling.html 
+https://aclanthology.org/U15-1013.pdf 
+Remove words shorter than 3 characters
+
+```{r}
+data_with_sentiment_tokenised <- data_with_sentiment_tokenised %>% 
+  filter(xpos %in% c("NN", "NNS", "NNPS", "JJ")) %>% 
+  filter(str_length(lemma) >2) %>%  
+  select(doc_id, sentence_id, sentence, token, lemma, xpos)
+```
+
+Filter words shorter than 3 letters.
+
+Check most common words
+```{r}
+article_words<- data_with_sentiment_tokenised %>% 
+  count(doc_id, lemma, sort=TRUE)
+article_words
+```
+### Term frequency
+```{r}
+data_tf_idf <- article_words %>% 
+  bind_tf_idf(lemma, doc_id, n) %>% 
+  mutate(doc_id = as.integer(doc_id)) %>% 
+  left_join(data_with_sentiment, by=c("doc_id" = "ID")) %>% 
+  select(-Text_Content) %>% 
+  mutate(doc_id = as.character(doc_id)) %>% 
+  rename(ID = doc_id) %>% 
+  rename(word = lemma)
+```
+
+This figure is not useful
+```{r}
+data_tf_idf %>%
+  group_by(Outlet_Name) %>%
+  slice_max(tf_idf, n = 10) %>%
+  ungroup() %>%
+  ggplot(aes(tf_idf, fct_reorder(word, tf_idf), fill = Outlet_Name)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~Outlet_Name, ncol = 2, scales = "free") +
+  labs(x = "tf-idf", y = NULL)
+```
+
+# Creating a dtm
+
+This casting process allows for reading, filtering, and processing to be done using dplyr and other tidy tools, after which the data can be converted into a document-term matrix for machine learning applications. 
+
+```{r}
+data_dtm <- data_tf_idf %>% 
+  cast_dtm(ID, word, n)
+```
+
+## Determine how many topics we need:
+
+*NB, depending on the size of the dataset and your computer, this can take a long time to run. Anywhere from 1 minute to 24+ hours*
+
+```{r}
+result <- FindTopicsNumber(
+  data_dtm,
+  topics = seq(from = 2, to = 45, by = 1), #here we are testing between 2 and 45 topics ***
+  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+  method = "Gibbs",
+  control = list(seed = 42),
+  mc.cores = 2L,
+  verbose = TRUE
+)
+```
+
+To interpret:
+
+We want to minimize:
+- Arun2010 
+- CaoJuan2009
+
+We want to maximize:
+- Deveaud2014
+- Griffiths2004
+
+
+```{r}
+FindTopicsNumber_plot(result)
+```
+## Fit an LDA topic model:
+
+k represents the number of topics (the larger the dataset and the more topics, the longer it will take to run)
+
+```{r}
+data_lda <- LDA(data_dtm, k = 15, control = list(seed = 1234))
+data_lda
+```
+
+# Word-topic probabilities
+
+We do this to understand what the topics are about
+
+The per-topic-per-word probabilities are called beta and can be extracted from the model.
+
+```{r}
+data_topics <- tidy(data_lda, matrix = "beta")
+```
+
+For each topic-term combination (represented on a row) the model estimates the probability of a term belonging to the topic. We can identify the 15 terms most associated with a given topic.
+
+```{r}
+data_topics %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 15) %>% 
+  ungroup() %>%
+  arrange(topic, -beta) %>% 
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, 
+             fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, 
+             scales = "free") + #set ncol = 4 if more topics
+  scale_y_reordered() + 
+  labs(title = "Top 15 terms in each LDA topic",
+       x = expression(beta), y = NULL) +
+  theme_minimal()
+```
+
+This figure highlights the terms most representative of a given topic.
+
+# Document-topic probabilities
+
+LDA also models each document as a mixture of topics. We can examine the per-document-per-topic probabilities, called gamma. Note, here documents = articles. We might then assign the topic to a document that has the highest probability (or 2 topics)
+
+```{r}
+data_documents <- tidy(data_lda, matrix = "gamma")
+```
+
+Bring back the rest of the variables
+```{r}
+data_with_gamma_details <- data_documents %>% 
+  mutate(document = as.integer(document)) %>% 
+  left_join(data_with_sentiment, by = c("document" = "ID")) %>% 
+  rename(ID = document)
+```
+
+```{r}
+data_with_gamma_details
+```
+
+
+```{r}
+data_with_gamma_details %>% 
+  ggplot(aes(gamma, fill = as.factor(topic))) +
+  geom_histogram(alpha = 0.8, show.legend = FALSE, bins = 20) +
+  facet_wrap(~ topic, ncol = 4) +
+  labs(title = "Distribution of probability for each topic",
+       y = "Number of documents", x = expression(gamma))
+```
+
+Identify the 2 topics most associated with a given document (article).
+
+```{r}
+data_topics_and_sentiment <- data_with_gamma_details %>% 
+  group_by(ID) %>% 
+  slice_max(gamma, n = 2) %>%
+  ungroup()
+
+data_topics_and_sentiment
+```
+############## Section 5: Topic-Sentiment ############## 
+
+multiply the document sentiment by the normalised gamma value (gamma divided by the sum of gamma for the top n topics)
+
+```{r}
+data_topics_with_sentiment <- data_topics_and_sentiment %>% 
+  group_by(ID) %>% 
+  mutate(sum_gamma = sum(gamma)) %>% 
+  ungroup() %>% 
+  mutate(normalised_gamma = gamma/sum_gamma,
+         topic_sentiment = ave_sentiment *normalised_gamma)
+```
+
+```{r}
+data_topics_with_sentiment
+```
+
+## Exploring
+Can play around here to look at different articles/documents and see 1) which topics are covered and 2) the weighted sentiment for these topics
+```{r}
+data_topics_with_sentiment %>% 
+  filter(ID == 4) %>%  #change this here to see the topic-sentiment for different articles
+  select(ID, topic, gamma, ave_sentiment, normalised_gamma, topic_sentiment)
+```
+## Descriptive statistics for topics
+
+```{r}
+data_topics_with_sentiment %>% 
+  group_by(topic) %>% 
+  summarise(n = n(),
+            mean = round(mean(topic_sentiment), 3),
+            sd = round(sd(topic_sentiment),3),
+            median = round(median(topic_sentiment),3),
+            min = round(min(topic_sentiment),3),
+            max = round(max(topic_sentiment),3)) %>% 
+  arrange(median)
+```
+
+```{r}
+data_topics_with_sentiment %>% 
+  mutate(topic = as.factor(topic)) %>% 
+  ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment)) +
+  geom_hline(yintercept=0, linetype=4)+
+  geom_boxplot() +
+  coord_flip() +
+  labs(x = "x axis label", y = "y axis label", title = "figure title", subtitle = "subtitle")+
+  theme_minimal()+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+
+This figure won't work - perhaps outlet category?
+```{r}
+data_topics_with_sentiment %>% 
+  mutate(topic = as.factor(topic)) %>% 
+  ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment, fill=Outlet_Name)) + #change to outlet category
+  geom_hline(yintercept=0, linetype=4)+
+  geom_boxplot() +
+  coord_flip() +
+  labs(x = "x axis label", y = "y axis label", title = "figure title", subtitle = "subtitle")+
+  theme_minimal()+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+
+############## Section 6: per topic, number of negative sentences vs. number of positive sentences ############## 
+
+```{r}
+data_with_gamma_with_sentence_sentiment_count <- data_documents %>% 
+  mutate(document = as.integer(document)) %>% 
+  left_join(sentence_level_sentiment_with_data_counts, by = c("document" = "ID")) %>% 
+  rename(ID = document) %>% 
+   group_by(ID) %>% 
+  slice_max(gamma, n = 1) %>%
+  ungroup()
+
+data_with_gamma_with_sentence_sentiment_count
+```
+
+```{r}
+data_topic_sentences_sentiment_count <- data_with_gamma_with_sentence_sentiment_count %>% 
+  group_by(ID) %>% 
+  mutate(sum_gamma = sum(gamma)) %>% 
+  ungroup() %>% 
+  mutate(normalised_gamma = gamma/sum_gamma,
+         topic_pos = round(n_pos/(n_pos+n_neg) *normalised_gamma, 2),
+         topic_neg = round(n_neg/(n_pos+n_neg) *normalised_gamma,2))
+```
+
+```{r}
+data_topic_sentences_sentiment_count %>% 
+  select(ID, topic, topic_pos, topic_neg)
+```
+```{r}
+data_topic_sentences_sentiment_count %>% 
+  select(ID, topic, topic_pos, topic_neg) %>% 
+  group_by(topic) %>% 
+  summarise(m_pos = mean(topic_pos),
+            sd_pos = sd(topic_pos),
+            m_neg = mean(topic_neg),
+            sd_neg = sd(topic_neg)) %>% 
+  arrange(desc(m_neg))
+```
+
+
