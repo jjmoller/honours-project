@@ -305,7 +305,7 @@ data_with_sentiment
 ```
 ## Descriptive analysis of sentiment by (either outlet or outlet category)
 ```{r}
-data_with_sentiment %>% 
+data_with_sentiment_summary<-data_with_sentiment %>% 
   group_by(Outlet_Name) %>% 
   summarise(mean = mean(ave_sentiment),
             sd = sd(ave_sentiment),
@@ -313,7 +313,23 @@ data_with_sentiment %>%
             min = min(ave_sentiment),
             max = max(ave_sentiment),
             n = n())
+
+data_with_sentiment_summary
+
 ```
+
+Top 5 positive and negative sentiment outlets by article sentiment
+```{r}
+data_with_sentiment_outlets <- data_with_sentiment_summary %>% 
+  filter(n>4)
+
+data_with_sentiment_outlets %>% arrange(desc(mean)) %>%
+    slice(1:5)
+data_with_sentiment_outlets %>% arrange(mean)%>%
+    slice(1:5) 
+
+```
+
 
 ## Visualisation of sentiment (will probably adjust to outlet category rather than outlet)
 Only plots for those outlets with 4 or more articles included
@@ -504,8 +520,8 @@ sentence_level_sentiment_with_data_counts <- sentence_level_sentiment_with_data 
 sentence_level_sentiment_with_data_counts
 ```
 
-#CHANGE: Article level, not sentence level
-Top 5 positive and negative sentiment outlets
+
+Top 5 positive and negative sentiment outlets by sentence sentiment
 ```{r}
 sentence_level_sentiment_with_data_counts <- sentence_level_sentiment_with_data %>% 
   group_by(Outlet_Name) %>% 
