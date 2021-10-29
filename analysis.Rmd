@@ -285,8 +285,10 @@ articles_with_sentiment <- initial_clean_data %>%
 articles_with_sentiment
 ```
 
+
 Visualise sentiment distribution
 
+#Articles
 ```{r}
 articles_with_sentiment %>% 
   ggplot(aes(x = ave_sentiment))+
@@ -552,6 +554,11 @@ sentence_level_sentiment_with_data_counts_top
 
 First use the `udpipe` package to clean the data.
 
+```{r}
+install.packages('Rcpp')
+library(Rcpp)
+```
+
 Load the English language model with `udpipe`
 ```{r}
 english_language_model <- udpipe_load_model(file = "english-ewt-ud-2.5-191206.udpipe")
@@ -573,7 +580,7 @@ data_with_sentiment_tokenised <- as.data.frame(udpipe_annotate(english_language_
                                                              parser = "none",
                                                              trace=TRUE))
 
-data_with_sentiment_tokenised
+#data_with_sentiment_tokenised
 ```
 
 only words tagged with NN (noun, singular or mass), NNS (noun, plural), NNP (proper noun, singular), NNPS (proper noun, plural) and JJ (adjective) were retained. 
@@ -791,23 +798,52 @@ data_topics_with_sentiment %>%
         panel.grid.minor.x = element_blank())
 ```
 
-This figure won't work - perhaps outlet category?
+#Outlook cateogory
 ```{r}
 data_topics_with_sentiment %>% 
   mutate(topic = as.factor(topic)) %>% 
-  ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment, fill=Outlet_Name)) + #change to outlet category
+  ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment, fill=website_category)) + #change to outlet category
   geom_hline(yintercept=0, linetype=4)+
   geom_boxplot() +
   coord_flip() +
-  labs(x = "x axis label", y = "y axis label", title = "figure title", subtitle = "subtitle")+
+  labs(x = "Sentiment", y = "Topic", title = "Topic sentiment distribution by outlet category", subtitle = "subtitle")+
   theme_minimal()+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
 ```
 
+#Popular news media
+```{r}
+data_topics_with_sentiment %>% 
+  mutate(topic = as.factor(topic)) %>% 
+  filter(website_category=="Popular news media") %>% 
+  group_by(Outlet_Name) %>% 
+  add_count(Outlet_Name) %>% 
+  filter(n>28) %>% 
+  ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment, fill=Outlet_Name)) + #change to outlet category
+  geom_hline(yintercept=0, linetype=4)+
+  geom_boxplot() +
+  coord_flip() +
+  labs(x = "Sentiment", y = "Topic", title = "Topic sentiment distribution by outlet category", subtitle = "subtitle")+
+  theme_minimal()+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+
+
+
 ############## Section 6: per topic, number of negative sentences vs. number of positive sentences ############## 
 
 ```{r}
+sentence_level_sentiment_with_data_counts <- sentence_level_sentiment_with_data %>% 
+  group_by(ID) %>% 
+  mutate(pos = sum(ave_sentiment > 0),
+         neg = sum(ave_sentiment < 0),
+         diff = pos - neg) %>% #what about neutral can set some cutoffs?
+  summarise(n_pos = mean(pos),
+            n_neg = mean(neg),
+            diff = mean(diff))
+
 data_with_gamma_with_sentence_sentiment_count <- data_documents %>% 
   mutate(document = as.integer(document)) %>% 
   left_join(sentence_level_sentiment_with_data_counts, by = c("document" = "ID")) %>% 
@@ -833,6 +869,7 @@ data_topic_sentences_sentiment_count <- data_with_gamma_with_sentence_sentiment_
 data_topic_sentences_sentiment_count %>% 
   select(ID, topic, topic_pos, topic_neg)
 ```
+
 ```{r}
 data_topic_sentences_sentiment_count %>% 
   select(ID, topic, topic_pos, topic_neg) %>% 
