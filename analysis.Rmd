@@ -1004,16 +1004,30 @@ data_topics_with_sentiment %>%
 
 ```
 
-who reports on the popular topics and how do they report on it
+#Who reports on the popular topics and how do they report on 
+
+Topic 15
 ```{r}
+#Select all articles where this topic has the highest gamma score. Then get the average topic sentiment for this topic per outlet. 
+
 
 data_topics_with_sentiment %>% 
   group_by(ID) %>% 
   slice_max(gamma, n = 1) %>%
   select("ID","topic","gamma","ave_sentiment","Author","Outlet_Name", "topic_sentiment") %>% 
-  filter(topic=="15") %>% 
-  group_by(Outlet_Name) %>%
-  tally(sort=TRUE) %>%
-  mutate(freq = round((n / sum(n)) * 100,2))
+  filter(topic==5) %>% 
+  group_by(Outlet_Name) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  left_join(data_topics_with_sentiment %>% 
+  group_by(ID) %>% 
+  slice_max(gamma, n = 1) %>%
+  filter(topic==15) %>% 
+  ungroup() %>% 
+  group_by(Outlet_Name) %>% 
+  mutate(ave_topic_sentiment= ave(topic_sentiment)) %>% slice(Outlet_Name, n=1) %>%
+  select("Outlet_Name", "ave_topic_sentiment"), by="Outlet_Name") %>% 
+  arrange(desc(n))
+  
 
 ```
