@@ -26,7 +26,7 @@ if (!require("pacman")) install.packages("pacman");
 library(pacman)
 pacman::p_load(tidyverse, dplyr, ggplot2, ggforce, tidytext, textdata, tokenizers, stringr, readxl, 
                forcats, tm, topicmodels, lubridate, ldatuning, sentimentr, textclean,
-               PupillometryR, scales, udpipe)
+               PupillometryR, scales, udpipe, patchwork)
 
 # Create expected directory structure:
 
@@ -145,6 +145,7 @@ outlet_count <- initial_clean_data %>%
   mutate(freq = round((n / sum(n)) * 100,2))
 
 ```
+
 
 Descriptive statistics for articles per media house
 ```{r}
@@ -271,6 +272,8 @@ note the above decisions (see Cornelissen et al. for a similar write up)
 
 *another option we can consider is the distribution/proportion of neg/pos sentences in an article* (see later)
 
+
+#Average sentiment for each article:
 ```{r}
 articles_with_sentiment <- initial_clean_data %>%
   get_sentences(.$Text_Content) %>% 
@@ -285,7 +288,6 @@ articles_with_sentiment <- initial_clean_data %>%
 articles_with_sentiment
 ```
 
-
 Visualise sentiment distribution
 
 #Articles
@@ -295,6 +297,29 @@ articles_with_sentiment %>%
   geom_density() + 
   theme_minimal()
 ```
+#What about article title sentiment? 
+
+```{r}
+articles_title_with_sentiment <- initial_clean_data %>%
+  select("ID","Title","Author","Date_Published") %>% 
+  get_sentences(.$Title) %>% 
+  sentiment_by(.$ID, 
+               polarity_dt = lexicon::hash_sentiment_jockers_rinker,
+               valence_shifters_dt = lexicon::hash_valence_shifters,
+               amplifier.weight = 2,
+               n.before = 3, n.after = 3,
+               question.weight = 0,
+               neutral.nonverb.like = TRUE)
+
+articles_title_with_sentiment 
+
+articles_title_with_sentiment %>% 
+  ggplot(aes(x = ave_sentiment))+
+  geom_density() + 
+  theme_minimal()
+
+```
+
 
 ### Bring back the rest of the data
 
@@ -337,7 +362,8 @@ data_with_sentiment_outlets %>% arrange(mean)%>%
 Only plots for those outlets with 4 or more articles included
 
 ```{r}
-data_with_sentiment %>% 
+
+p1<-data_with_sentiment %>% 
   group_by(Outlet_Name) %>% 
   add_count(Outlet_Name) %>% 
   filter(n > 4) %>% 
@@ -361,7 +387,7 @@ data_with_sentiment %>%
 Popular news media outlets
 
 ```{r}
-data_with_sentiment %>% 
+p2<-data_with_sentiment %>% 
   group_by(Outlet_Name) %>%
   filter(website_category=="Popular news media") %>% 
   add_count(Outlet_Name) %>% 
@@ -381,6 +407,7 @@ data_with_sentiment %>%
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank()
   )
+p1+p2
 ```
 
 ## Descriptive analysis of sentiment by data published
@@ -552,6 +579,8 @@ sentence_level_sentiment_with_data_counts_top
 
 ############## Section 4: Topic Modeling ############## 
 
+#gamma is an estimated proportion of words from that document that are generated from that topic
+
 First use the `udpipe` package to clean the data.
 
 ```{r}
@@ -580,7 +609,7 @@ data_with_sentiment_tokenised <- as.data.frame(udpipe_annotate(english_language_
                                                              parser = "none",
                                                              trace=TRUE))
 
-#data_with_sentiment_tokenised
+data_with_sentiment_tokenised
 ```
 
 only words tagged with NN (noun, singular or mass), NNS (noun, plural), NNP (proper noun, singular), NNPS (proper noun, plural) and JJ (adjective) were retained. 
@@ -641,15 +670,15 @@ data_dtm <- data_tf_idf %>%
 *NB, depending on the size of the dataset and your computer, this can take a long time to run. Anywhere from 1 minute to 24+ hours*
 
 ```{r}
-result <- FindTopicsNumber(
-  data_dtm,
-  topics = seq(from = 2, to = 45, by = 1), #here we are testing between 2 and 45 topics ***
-  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
-  method = "Gibbs",
-  control = list(seed = 42),
-  mc.cores = 2L,
-  verbose = TRUE
-)
+#result <- FindTopicsNumber(
+#  data_dtm,
+#  topics = seq(from = 2, to = 45, by = 1), #here we are testing between 2 and 45 topics ***
+#  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+#  method = "Gibbs",
+#  control = list(seed = 42),
+#  mc.cores = 2L,
+#  verbose = TRUE
+#)
 ```
 
 To interpret:
@@ -664,7 +693,7 @@ We want to maximize:
 
 
 ```{r}
-FindTopicsNumber_plot(result)
+#FindTopicsNumber_plot(result)
 ```
 ## Fit an LDA topic model:
 
@@ -800,7 +829,25 @@ data_topics_with_sentiment %>%
 
 #Outlook cateogory
 ```{r}
-data_topics_with_sentiment %>% 
+data_topics_with_labels<-data_topics_with_sentiment
+
+data_topics_with_labels$topic[data_topics_with_labels$topic == "1"] <- "Sleep"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "2"] <- "Social media use"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "3"] <- "WHO guidelines"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "4"] <- "Covid-19"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "5"] <- "Regulatory applications"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "6"] <- "Cognitive ability"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "7"] <- "Screen time SCICOMM"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "8"] <- "Education"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "9"] <- "Alternatives to screen time"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "10"] <- "Mobile"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "11"] <- "Government guidelines"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "12"] <- "Weight"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "13"] <- "Social skills"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "14"] <- "Gaming addiction"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "15"] <- "Mental health"
+
+p3<-data_topics_with_labels %>% 
   mutate(topic = as.factor(topic)) %>% 
   ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment, fill=website_category)) + #change to outlet category
   geom_hline(yintercept=0, linetype=4)+
@@ -810,11 +857,12 @@ data_topics_with_sentiment %>%
   theme_minimal()+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
+p3
 ```
 
 #Popular news media
 ```{r}
-data_topics_with_sentiment %>% 
+p4<-data_topics_with_labels%>% 
   mutate(topic = as.factor(topic)) %>% 
   filter(website_category=="Popular news media") %>% 
   group_by(Outlet_Name) %>% 
@@ -824,12 +872,26 @@ data_topics_with_sentiment %>%
   geom_hline(yintercept=0, linetype=4)+
   geom_boxplot() +
   coord_flip() +
-  labs(x = "Sentiment", y = "Topic", title = "Topic sentiment distribution by outlet category", subtitle = "subtitle")+
+  labs(x = "Sentiment", y = "Topic", title = "Topic sentiment distribution by popular news media outlets", subtitle = "Top 8 outlets")+
   theme_minimal()+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
+
+p3+p4
 ```
 
+#Topic timeline
+
+```{r}
+data_topics_with_sentiment%>% select(topic, week) %>% 
+  group_by(week) %>% 
+  ggplot(mapping = aes(x = week)) +
+  geom_bar(aes(fill= factor(topic)))+  #can also use geom_point
+   theme_minimal()+
+  labs(x = "week", y = "count", title = "Prevailing article topics over time", subtitle = "All categories")+
+  facet_wrap(~topic)
+
+```
 
 
 ############## Section 6: per topic, number of negative sentences vs. number of positive sentences ############## 
@@ -854,6 +916,7 @@ data_with_gamma_with_sentence_sentiment_count <- data_documents %>%
 
 data_with_gamma_with_sentence_sentiment_count
 ```
+
 
 ```{r}
 data_topic_sentences_sentiment_count <- data_with_gamma_with_sentence_sentiment_count %>% 
@@ -881,4 +944,76 @@ data_topic_sentences_sentiment_count %>%
   arrange(desc(m_neg))
 ```
 
+#Dan's code
+Top 5 most and least reported on topics
+```{r}
+outlet_topic_count <- data_topics_with_sentiment %>%
+group_by(topic) %>%
+# split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
+tally(sort=TRUE) %>%
+mutate(freq = round((n / sum(n)) * 100,2))
+outlet_topic_count
 
+
+
+top <- outlet_topic_count %>% arrange(desc(freq)) %>%
+slice(1:5)
+bot <- outlet_topic_count %>% arrange(freq)%>%
+slice(1:5)
+outlet_topic_count<- rbind(top, bot)
+
+
+
+outlet_topic_count
+```
+
+popular news media top 5 most prevalent topics and least prevalent topics
+```{r}
+data_topics_and_sentiment <- data_with_gamma_details %>% 
+  group_by(ID) %>% 
+  slice_max(gamma, n = 1) %>%  #most popular topic per document
+  ungroup()
+
+outlet_topic_count <- data_topics_and_sentiment %>% 
+  filter(website_category=="Popular news media") %>% 
+group_by(topic) %>%
+tally(sort=TRUE) %>%
+mutate(freq = round((n / sum(n)) * 100,2))
+outlet_topic_count
+
+top <- outlet_topic_count %>% arrange(desc(freq)) %>%
+slice(1:5)
+bot <- outlet_topic_count %>% arrange(freq)%>%
+slice(1:5)
+outlet_topic_count<- rbind(top, bot)
+
+outlet_topic_count
+```
+
+#juan code
+
+
+per article, topic and average article sentiment with topic_sentiment
+```{r}
+
+data_topics_with_sentiment %>% 
+  select("ID","topic","gamma","normalised_gamma","ave_sentiment","Author","Outlet_Name", "topic_sentiment") %>% 
+   group_by(ID) %>% 
+  slice_max(gamma, n = 1) %>%
+  ungroup()
+
+```
+
+who reports on the popular topics and how do they report on it
+```{r}
+
+data_topics_with_sentiment %>% 
+  group_by(ID) %>% 
+  slice_max(gamma, n = 1) %>%
+  select("ID","topic","gamma","ave_sentiment","Author","Outlet_Name", "topic_sentiment") %>% 
+  filter(topic=="15") %>% 
+  group_by(Outlet_Name) %>%
+  tally(sort=TRUE) %>%
+  mutate(freq = round((n / sum(n)) * 100,2))
+
+```
