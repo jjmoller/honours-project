@@ -316,25 +316,7 @@ articles_title_with_sentiment %>%
   theme_minimal()
 
 ```
-#Article body vs article title sentiment comparison
-```{r}
-body_vs_title_sentiment<-articles_with_sentiment %>% 
-  inner_join(articles_title_with_sentiment, by="by") %>%  #should we filter out headlines where sentiment=0?
-  mutate(diff=-1*(ave_sentiment.x-ave_sentiment.y)) %>% 
-   filter(ave_sentiment.x>=0 & ave_sentiment.y>=0) %>% rbind(articles_with_sentiment %>% 
-  inner_join(articles_title_with_sentiment, by="by") %>% 
-  mutate(diff=-1*(ave_sentiment.x-ave_sentiment.y)) %>% 
-  filter(ave_sentiment.x<0 & ave_sentiment.y<0)) %>% rbind(articles_with_sentiment %>% 
-  inner_join(articles_title_with_sentiment, by="by") %>% 
-  mutate(diff=-1*(ave_sentiment.x-ave_sentiment.y) )%>% 
-  filter(ave_sentiment.x>=0 & ave_sentiment.y<0))%>% rbind(articles_with_sentiment %>% 
-  inner_join(articles_title_with_sentiment, by="by") %>% 
-  mutate(diff=ave_sentiment.y-ave_sentiment.x) %>% 
-  filter(ave_sentiment.x<0 & ave_sentiment.y>=0)) %>% 
-  arrange(by)
-body_vs_title_sentiment
-summarise(body_vs_title_sentiment, Average = mean(diff, na.rm = T))
-```
+
 
 ### Bring back the rest of the data
 
@@ -386,7 +368,8 @@ p1<-data_with_sentiment %>%
   geom_hline(yintercept=0, linetype=4)+
   geom_boxplot(width = .4, 
                guides = FALSE, 
-               outlier.shape = NA) +
+               outlier.shape = NA,
+               fill="peachpuff1") +
   geom_point(aes(y = ave_sentiment), 
              position = position_jitter(width = .1), 
              size = 1, alpha = 0.5) + 
@@ -410,7 +393,8 @@ p2<-data_with_sentiment %>%
   geom_hline(yintercept=0, linetype=4)+
   geom_boxplot(width = .4, 
                guides = FALSE, 
-               outlier.shape = NA) +
+               outlier.shape = NA,
+               fill="peachpuff1") +
   geom_point(aes(y = ave_sentiment), 
              position = position_jitter(width = .1), 
              size = 1, alpha = 0.5) + 
@@ -549,32 +533,65 @@ sentence_level_sentiment_with_data_counts
 ```
 
 
-Top 5 positive and negative sentiment outlets by sentence sentiment
+<!-- Top 5 positive and negative sentiment outlets by sentence sentiment -->
+<!-- ```{r} -->
+<!-- sentence_level_sentiment_with_data_counts <- sentence_level_sentiment_with_data %>%  -->
+<!--   group_by(Outlet_Name) %>%  -->
+<!--   mutate(pos = sum(ave_sentiment > 0), -->
+<!--          neg = sum(ave_sentiment < 0), -->
+<!--          diff = pos - neg) %>% #what about neutral can set some cutoffs? -->
+<!--   summarise(n_pos = mean(pos), -->
+<!--             n_neg = mean(neg), -->
+<!--             diff = mean(diff)) -->
+
+<!-- sentence_level_sentiment_with_data_counts<-sentence_level_sentiment_with_data_counts %>%  -->
+<!--   left_join(outlet_count, by = "Outlet_Name") %>%  filter(n>4) -->
+
+<!-- sentence_level_sentiment_with_data_counts -->
+
+<!-- sentence_level_sentiment_with_data_counts_top5<-sentence_level_sentiment_with_data_counts %>% arrange(desc(diff)) %>% -->
+<!--     slice(1:5) -->
+<!-- sentence_level_sentiment_with_data_counts_bottom5<-sentence_level_sentiment_with_data_counts %>% arrange(diff)%>% -->
+<!--     slice(1:5)  -->
+
+<!-- sentence_level_sentiment_with_data_counts_top<- rbind(sentence_level_sentiment_with_data_counts_top5, sentence_level_sentiment_with_data_counts_bottom5) -->
+
+<!-- sentence_level_sentiment_with_data_counts_top -->
+
+<!-- ``` -->
+
+#Article body vs article title sentiment comparison
 ```{r}
-sentence_level_sentiment_with_data_counts <- sentence_level_sentiment_with_data %>% 
-  group_by(Outlet_Name) %>% 
-  mutate(pos = sum(ave_sentiment > 0),
-         neg = sum(ave_sentiment < 0),
-         diff = pos - neg) %>% #what about neutral can set some cutoffs?
-  summarise(n_pos = mean(pos),
-            n_neg = mean(neg),
-            diff = mean(diff))
+body_vs_title_sentiment<-articles_with_sentiment %>% 
+  inner_join(articles_title_with_sentiment, by="by") %>%  #should we filter out headlines where sentiment=0?
+  mutate(diff=-1*(ave_sentiment.x-ave_sentiment.y)) %>% 
+   filter(ave_sentiment.x>=0 & ave_sentiment.y>=0) %>% rbind(articles_with_sentiment %>% 
+  inner_join(articles_title_with_sentiment, by="by") %>% 
+  mutate(diff=-1*(ave_sentiment.x-ave_sentiment.y)) %>% 
+  filter(ave_sentiment.x<0 & ave_sentiment.y<0)) %>% rbind(articles_with_sentiment %>% 
+  inner_join(articles_title_with_sentiment, by="by") %>% 
+  mutate(diff=-1*(ave_sentiment.x-ave_sentiment.y) )%>% 
+  filter(ave_sentiment.x>=0 & ave_sentiment.y<0))%>% rbind(articles_with_sentiment %>% 
+  inner_join(articles_title_with_sentiment, by="by") %>% 
+  mutate(diff=ave_sentiment.y-ave_sentiment.x) %>% 
+  filter(ave_sentiment.x<0 & ave_sentiment.y>=0)) %>% 
+  rename(ID = by) %>% 
+  arrange(ID)
 
-sentence_level_sentiment_with_data_counts<-sentence_level_sentiment_with_data_counts %>% 
-  left_join(outlet_count, by = "Outlet_Name") %>%  filter(n>4)
+body_vs_title_sentiment
+summarise(body_vs_title_sentiment, Average = mean(diff, na.rm = T))
+```
 
-sentence_level_sentiment_with_data_counts
-
-sentence_level_sentiment_with_data_counts_top5<-sentence_level_sentiment_with_data_counts %>% arrange(desc(diff)) %>%
-    slice(1:5)
-sentence_level_sentiment_with_data_counts_bottom5<-sentence_level_sentiment_with_data_counts %>% arrange(diff)%>%
-    slice(1:5) 
-
-sentence_level_sentiment_with_data_counts_top<- rbind(sentence_level_sentiment_with_data_counts_top5, sentence_level_sentiment_with_data_counts_bottom5)
-
-sentence_level_sentiment_with_data_counts_top
+Sentiment difference by website category
+```{r}
+body_vs_title_sentiment %>% left_join(data_with_sentiment, by="ID") %>% 
+  group_by(website_category) %>% 
+    summarise(ave_body_sen = mean(ave_sentiment.x),
+              ave_title_sen = mean(ave_sentiment.y),
+              ave_diff = mean(diff))
 
 ```
+
 
 ############## Section 4: Topic Modeling ############## 
 
@@ -583,8 +600,8 @@ sentence_level_sentiment_with_data_counts_top
 First use the `udpipe` package to clean the data.
 
 ```{r}
-install.packages('Rcpp')
-library(Rcpp)
+#install.packages('Rcpp')
+#library(Rcpp)
 ```
 
 Load the English language model with `udpipe`
@@ -818,9 +835,9 @@ data_topics_with_sentiment %>%
   mutate(topic = as.factor(topic)) %>% 
   ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment)) +
   geom_hline(yintercept=0, linetype=4)+
-  geom_boxplot() +
+  geom_boxplot(fill="lightyellow1") +
   coord_flip() +
-  labs(x = "x axis label", y = "y axis label", title = "figure title", subtitle = "subtitle")+
+  labs(x = "Topic", y = "Sentiment", title = "Topic sentiment values", subtitle = "")+
   theme_minimal()+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
@@ -861,7 +878,9 @@ legend.position = "bottom",
 legend.title = element_blank(),
 panel.grid.minor.x = element_blank()) +
 guides(fill = guide_legend(nrow = 3)) +
+  scale_fill_brewer(palette="Set2")+
 plot_annotation(tag_levels = 'A')
+
 p3
 ```
 
@@ -884,9 +903,13 @@ legend.title = element_blank(),
 axis.text.y = element_blank(),
 panel.grid.minor.x = element_blank()) +
 guides(fill = guide_legend(nrow = 3)) +
+scale_fill_brewer(palette="Set3")+
 plot_annotation(tag_levels = 'B')
 
-p3+p4
+p3p4<-p3+p4
+#ggsave("p3p4.pdf", widt=20, dpi=500)
+
+p3p4
 ```
 
 
@@ -1041,4 +1064,5 @@ data_topics_with_sentiment %>%
   select("Outlet_Name", "ave_topic_sentiment"), by="Outlet_Name") %>% 
   arrange(desc(n))
   
+
 ```
