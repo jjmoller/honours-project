@@ -320,6 +320,27 @@ articles_title_with_sentiment %>%
 
 ```
 
+#Article body vs article title sentiment comparison
+```{r}
+body_vs_title_sentiment<-articles_with_sentiment %>% 
+  inner_join(articles_title_with_sentiment, by="by") %>%  #should we filter out headlines where sentiment=0?
+  mutate(diff=-1*(ave_sentiment.x-ave_sentiment.y)) %>% 
+   filter(ave_sentiment.x>=0 & ave_sentiment.y>=0) %>% rbind(articles_with_sentiment %>% 
+  inner_join(articles_title_with_sentiment, by="by") %>% 
+  mutate(diff=-1*(ave_sentiment.x-ave_sentiment.y)) %>% 
+  filter(ave_sentiment.x<0 & ave_sentiment.y<0)) %>% rbind(articles_with_sentiment %>% 
+  inner_join(articles_title_with_sentiment, by="by") %>% 
+  mutate(diff=-1*(ave_sentiment.x-ave_sentiment.y) )%>% 
+  filter(ave_sentiment.x>=0 & ave_sentiment.y<0))%>% rbind(articles_with_sentiment %>% 
+  inner_join(articles_title_with_sentiment, by="by") %>% 
+  mutate(diff=ave_sentiment.y-ave_sentiment.x) %>% 
+  filter(ave_sentiment.x<0 & ave_sentiment.y>=0)) %>% 
+  arrange(by)
+
+body_vs_title_sentiment
+summarise(body_vs_title_sentiment, Average = mean(diff, na.rm = T))
+
+```
 
 ### Bring back the rest of the data
 
