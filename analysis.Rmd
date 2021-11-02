@@ -41,8 +41,8 @@ if (!dir.exists("figures")) {dir.create(file.path(wd, "figures"))}
 # Import and transform raw data (from data_raw folder)
 ```{r}
 raw_data <-read_excel("data_raw/data.xlsx", na="NA",  #renamed to data
-                      col_types = c("text", "text", "date", "date",  #changed from "text" to "date" for date columns -juan
-                                    "text", "text", "text","text"))
+                      col_types = c("text", "text", "date", "date", 
+                                    "text", "text", "text","text","text"))
 raw_data <- raw_data %>% 
   filter(!is.na(Text_Content)) %>% 
   filter(!is.na(Title))#remove any rows for which there is no article text
@@ -112,15 +112,12 @@ tally(sort=TRUE) %>%
 mutate(total = (sum(n)))
 
 
-
 initial_clean_data %>%
 filter(Date_Published>as.Date("2020-03-10")) %>%
 group_by(year) %>%
 # split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
 tally(sort=TRUE) %>%
 mutate(total = (sum(n)))
-
-
 
 ```
 
@@ -319,7 +316,6 @@ articles_title_with_sentiment %>%
   theme_minimal()
 
 ```
-
 #Article body vs article title sentiment comparison
 ```{r}
 body_vs_title_sentiment<-articles_with_sentiment %>% 
@@ -336,10 +332,8 @@ body_vs_title_sentiment<-articles_with_sentiment %>%
   mutate(diff=ave_sentiment.y-ave_sentiment.x) %>% 
   filter(ave_sentiment.x<0 & ave_sentiment.y>=0)) %>% 
   arrange(by)
-
 body_vs_title_sentiment
 summarise(body_vs_title_sentiment, Average = mean(diff, na.rm = T))
-
 ```
 
 ### Bring back the rest of the data
@@ -366,16 +360,16 @@ data_with_sentiment_summary
 
 ```
 
-Top 5 positive and negative sentiment outlets by article sentiment
+Top 5 positive and negative outlets by published article sentiment
 ```{r}
-data_with_sentiment_outlets <- data_with_sentiment_summary %>% 
-  filter(n>4)
-
-data_with_sentiment_outlets %>% arrange(desc(mean)) %>%
-    slice(1:5)
-data_with_sentiment_outlets %>% arrange(mean)%>%
-    slice(1:5) 
-
+data_with_sentiment_summary %>% 
+  filter(n>4) %>% 
+arrange(desc(mean)) %>%
+    slice(1:5) %>% 
+ rbind(data_with_sentiment_summary %>% 
+  filter(n>4) %>% 
+    arrange(mean)%>%
+    slice(1:5))
 ```
 
 
@@ -395,9 +389,9 @@ p1<-data_with_sentiment %>%
                outlier.shape = NA) +
   geom_point(aes(y = ave_sentiment), 
              position = position_jitter(width = .1), 
-             size = 1, alpha = 0.8) + 
+             size = 1, alpha = 0.5) + 
   guides(fill = "none") +
-  labs(x = "Media House", y = "Sentiment", title = "Sentiment by website category", subtitle = "")+
+  labs(x = "", y = "Sentiment", title = "", subtitle = "Website categories")+
   coord_flip()+
   theme_minimal() +
   theme(
@@ -419,16 +413,16 @@ p2<-data_with_sentiment %>%
                outlier.shape = NA) +
   geom_point(aes(y = ave_sentiment), 
              position = position_jitter(width = .1), 
-             size = 1, alpha = 0.8) + 
+             size = 1, alpha = 0.5) + 
   guides(fill = "none") +
-  labs(x = "Media House", y = "Sentiment", title = "Sentiment by popular news media outlets", subtitle = "")+
+  labs(x = "", y = "Sentiment", title = "", subtitle = "Popular news media outlets")+
   coord_flip()+
   theme_minimal() +
   theme(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank()
   )
-p1+p2
+p1+p2+plot_annotation(tag_levels = 'A')
 ```
 
 ## Descriptive analysis of sentiment by data published
@@ -490,22 +484,6 @@ data_with_sentiment_orbentwenge<-data_with_sentiment %>%
   filter(grepl("Orben", Text_Content))
 
  mean(data_with_sentiment_orbentwenge$ave_sentiment)
-
-```
-
-
-```{r}
-data_with_sentiment_facet<-data_with_sentiment %>% select(website_category, ave_sentiment, week) %>% 
-  group_by(week) %>%  
-  summarise(mean_sentiment = mean(ave_sentiment)) %>% 
-  left_join(data_with_sentiment, by = "week") %>% 
-  filter(mean_sentiment<0, website_category=="Popular news media")
-
- 
-  data_with_sentiment_facet %>% 
-  mutate(line_color = mean_sentiment < 0) %>% 
-  ggplot(mapping = aes(x = week, y = mean_sentiment)) +
-  geom_line()
 
 ```
 
@@ -849,6 +827,7 @@ data_topics_with_sentiment %>%
 ```
 
 #Outlook cateogory
+
 ```{r}
 data_topics_with_labels<-data_topics_with_sentiment
 
@@ -868,38 +847,49 @@ data_topics_with_labels$topic[data_topics_with_labels$topic == "13"] <- "Social 
 data_topics_with_labels$topic[data_topics_with_labels$topic == "14"] <- "Gaming addiction"
 data_topics_with_labels$topic[data_topics_with_labels$topic == "15"] <- "Mental health"
 
-p3<-data_topics_with_labels %>% 
-  mutate(topic = as.factor(topic)) %>% 
-  ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment, fill=website_category)) + #change to outlet category
-  geom_hline(yintercept=0, linetype=4)+
-  geom_boxplot() +
-  coord_flip() +
-  labs(x = "Sentiment", y = "Topic", title = "Topic sentiment distribution by outlet category", subtitle = "subtitle")+
-  theme_minimal()+
-  theme(panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank())
+
+p3<-data_topics_with_labels %>%
+mutate(topic = as.factor(topic)) %>%
+ggplot(aes(x = topic, y = topic_sentiment, fill=website_category)) + #change to outlet category
+geom_hline(yintercept=0, linetype=4)+
+geom_boxplot() +
+coord_flip() +
+labs(x = "", y = "Sentiment", subtitle = "Website Category")+
+theme_minimal()+
+theme(panel.grid.major.x = element_blank(),
+legend.position = "bottom",
+legend.title = element_blank(),
+panel.grid.minor.x = element_blank()) +
+guides(fill = guide_legend(nrow = 3)) +
+plot_annotation(tag_levels = 'A')
 p3
 ```
 
-#Popular news media
 ```{r}
-p4<-data_topics_with_labels%>% 
-  mutate(topic = as.factor(topic)) %>% 
-  filter(website_category=="Popular news media") %>% 
-  group_by(Outlet_Name) %>% 
-  add_count(Outlet_Name) %>% 
-  filter(n>28) %>% 
-  ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment, fill=Outlet_Name)) + #change to outlet category
-  geom_hline(yintercept=0, linetype=4)+
-  geom_boxplot() +
-  coord_flip() +
-  labs(x = "Sentiment", y = "Topic", title = "Topic sentiment distribution by popular news media outlets", subtitle = "Top 8 outlets")+
-  theme_minimal()+
-  theme(panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank())
+p4<-data_topics_with_labels%>%
+mutate(topic = as.factor(topic)) %>%
+filter(website_category=="Popular news media") %>%
+group_by(Outlet_Name) %>%
+add_count(Outlet_Name) %>%
+filter(n>28) %>%
+ggplot(aes(x = topic, y = topic_sentiment, fill=Outlet_Name)) + #change to outlet category
+geom_hline(yintercept=0, linetype=4)+
+geom_boxplot() +
+coord_flip() +
+labs(x = "", y = "Sentiment", subtitle = "Popular News Media")+
+theme_minimal()+
+theme(panel.grid.major.x = element_blank(),
+legend.position = "bottom",
+legend.title = element_blank(),
+axis.text.y = element_blank(),
+panel.grid.minor.x = element_blank()) +
+guides(fill = guide_legend(nrow = 3)) +
+plot_annotation(tag_levels = 'B')
 
 p3+p4
 ```
+
+
 
 #Topic timeline
 
@@ -907,6 +897,7 @@ p3+p4
 data_topics_with_sentiment%>% select(topic, week) %>% 
   group_by(week) %>% 
   ggplot(mapping = aes(x = week)) +
+   geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4)+
   geom_bar(aes(fill= factor(topic)))+  #can also use geom_point
    theme_minimal()+
   labs(x = "week", y = "count", title = "Prevailing article topics over time", subtitle = "All categories")+
@@ -1017,11 +1008,11 @@ outlet_topic_count
 per article, topic and average article sentiment with topic_sentiment
 ```{r}
 
-data_topics_with_sentiment %>% 
-  select("ID","topic","gamma","normalised_gamma","ave_sentiment","Author","Outlet_Name", "topic_sentiment") %>% 
-   group_by(ID) %>% 
-  slice_max(gamma, n = 1) %>%
-  ungroup()
+data_topics_with_sentiment %>%
+select("ID","topic","gamma","normalised_gamma","ave_sentiment","Author","Outlet_Name", "Title","topic_sentiment") %>%
+group_by(ID) %>%
+slice_max(gamma, n = 1) %>%
+ungroup() %>% filter(topic==7) %>% arrange(desc(gamma))
 
 ```
 
@@ -1036,19 +1027,18 @@ data_topics_with_sentiment %>%
   group_by(ID) %>% 
   slice_max(gamma, n = 1) %>%
   select("ID","topic","gamma","ave_sentiment","Author","Outlet_Name", "topic_sentiment") %>% 
-  filter(topic==5) %>% 
+  filter(topic==7) %>% 
   group_by(Outlet_Name) %>% 
   summarise(n = n()) %>% 
   arrange(desc(n)) %>% 
   left_join(data_topics_with_sentiment %>% 
   group_by(ID) %>% 
   slice_max(gamma, n = 1) %>%
-  filter(topic==15) %>% 
+  filter(topic==7) %>% 
   ungroup() %>% 
   group_by(Outlet_Name) %>% 
   mutate(ave_topic_sentiment= ave(topic_sentiment)) %>% slice(Outlet_Name, n=1) %>%
   select("Outlet_Name", "ave_topic_sentiment"), by="Outlet_Name") %>% 
   arrange(desc(n))
   
-
 ```
