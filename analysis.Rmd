@@ -107,7 +107,7 @@ Number of articles before WHO announcement vs after announcement
 initial_clean_data %>%
 filter(Date_Published<as.Date("2020-03-11")) %>%
 group_by(year) %>%
-# split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
+#split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
 tally(sort=TRUE) %>%
 mutate(total = (sum(n)))
 
@@ -141,6 +141,7 @@ outlet_count <- initial_clean_data %>%
   tally(sort=TRUE) %>% 
   mutate(freq = round((n / sum(n)) * 100,2))
 
+outlet_count
 ```
 
 
@@ -380,6 +381,7 @@ p1<-data_with_sentiment %>%
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank()
   )
+p1
 ```
 Popular news media outlets
 
@@ -387,8 +389,8 @@ Popular news media outlets
 p2<-data_with_sentiment %>% 
   group_by(Outlet_Name) %>%
   filter(website_category=="Popular news media") %>% 
-  filter(n > 4) %>% 
   add_count(Outlet_Name) %>% 
+  filter(n > 4) %>%  #Only show outlets with more than 4 published articles
   ggplot(aes(x = fct_reorder(Outlet_Name, ave_sentiment), y = ave_sentiment)) +
   geom_hline(yintercept=0, linetype=4)+
   geom_boxplot(width = .4, 
@@ -587,8 +589,13 @@ Sentiment difference by website category
 body_vs_title_sentiment %>% left_join(data_with_sentiment, by="ID") %>% 
   group_by(website_category) %>% 
     summarise(ave_body_sen = mean(ave_sentiment.x),
+              body_median = median(ave_sentiment.x),
+              body_sd = sd(ave_sentiment.x),
               ave_title_sen = mean(ave_sentiment.y),
-              ave_diff = mean(diff))
+              title_median = median(ave_sentiment.y),
+              title_sd = sd(ave_sentiment.y),
+              ave_diff = mean(diff)) %>% 
+  arrange(ave_diff)
 
 ```
 
@@ -635,7 +642,7 @@ Remove words shorter than 3 characters
 
 ```{r}
 data_with_sentiment_tokenised <- data_with_sentiment_tokenised %>% 
-  filter(xpos %in% c("NN", "NNS", "NNPS", "JJ")) %>% 
+  filter(xpos %in% c("NN", "NNS", "NNPS", "JJ")) %>%  
   filter(str_length(lemma) >2) %>%  
   select(doc_id, sentence_id, sentence, token, lemma, xpos)
 ```
@@ -735,7 +742,7 @@ For each topic-term combination (represented on a row) the model estimates the p
 ```{r}
 data_topics %>%
   group_by(topic) %>%
-  slice_max(beta, n = 15) %>% 
+  slice_max(beta, n = 10) %>% 
   ungroup() %>%
   arrange(topic, -beta) %>% 
   mutate(term = reorder_within(term, beta, topic)) %>%
@@ -848,24 +855,25 @@ data_topics_with_sentiment %>%
 ```{r}
 data_topics_with_labels<-data_topics_with_sentiment
 
-data_topics_with_labels$topic[data_topics_with_labels$topic == "1"] <- "[1]Skill development"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "2"] <- "[2]Education"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "3"] <- "[3]Parental concerns"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "4"] <- "[4]General tech use"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "5"] <- "[5]Gaming"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "6"] <- "[6]Increased screentime"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "7"] <- "[7]Regulatory applications"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "8"] <- "[8]Eye health"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "9"] <- "[9]Social media effects on mental health"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "10"] <- "[10]Mobile screentime effects"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "11"] <- "[11]Screens and sedentary lifestyles"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "12"] <- "[12]Screentime and literacy"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "13"] <- "[13]SciComm"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "14"] <- "[14]Cognitive development/ sleep"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "15"] <- "[15]Government interventions"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "1"] <- "Skill development"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "2"] <- "Education"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "3"] <- "Parental concerns"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "4"] <- "General tech use"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "5"] <- "Gaming"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "6"] <- "Increased screentime"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "7"] <- "Regulatory applications"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "8"] <- "Eye health"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "9"] <- "Social media effects on mental health"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "10"] <- "Mobile screentime effects"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "11"] <- "Screens and sedentary lifestyles"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "12"] <- "Screentime and literacy"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "13"] <- "SciComm"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "14"] <- "Cognitive development/ sleep"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "15"] <- "Government interventions"
 
 
 p3<-data_topics_with_labels %>%
+arrange(topic) %>% 
 mutate(topic = as.factor(topic)) %>%
 ggplot(aes(x = topic, y = topic_sentiment, fill=website_category)) + #change to outlet category
 geom_hline(yintercept=0, linetype=4)+
@@ -882,6 +890,7 @@ guides(fill = guide_legend(nrow = 3)) +
 plot_annotation(tag_levels = 'A')
 
 p3
+ggsave("sentiment_per_website_category.pdf", width=10,height = 6, dpi=500)
 ```
 
 ```{r}
@@ -907,9 +916,10 @@ scale_fill_brewer(palette="Set3")+
 plot_annotation(tag_levels = 'B')
 
 p3p4<-p3+p4
-#ggsave("p3p4.pdf", widt=20, dpi=500)
+#ggsave("sentiment_per_category_per_popular_site.pdf", widt=20, dpi=500)
 
 p3p4
+
 ```
 
 
@@ -917,14 +927,18 @@ p3p4
 #Topic timeline
 
 ```{r}
-data_topics_with_sentiment%>% select(topic, week) %>% 
-  group_by(week) %>% 
+data_with_gamma_details%>% 
+  group_by(ID) %>% 
+  slice_max(gamma,n=1) %>% #or should it be top 1 terms?
   ggplot(mapping = aes(x = week)) +
    geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4)+
   geom_bar(aes(fill= factor(topic)))+  #can also use geom_point
    theme_minimal()+
   labs(x = "week", y = "count", title = "Prevailing article topics over time", subtitle = "All categories")+
+  #scale_fill_brewer(palette="BuPu")+
   facet_wrap(~topic)
+
+#ggsave("prevailing_article_topics_over_time.pdf", width=10, dpi=500)
 
 ```
 
@@ -982,7 +996,7 @@ data_topic_sentences_sentiment_count %>%
 #Dan's code
 Top 5 most and least reported on topics
 ```{r}
-outlet_topic_count <- data_topics_with_sentiment %>%
+outlet_topic_count <- data_with_gamma_with_sentence_sentiment_count %>%
 group_by(topic) %>%
 # split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
 tally(sort=TRUE) %>%
