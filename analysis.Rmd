@@ -158,6 +158,7 @@ outlet_count %>%  summarise(mean = mean(n),
 Visualisation of number of articles over time, with a dotted line at the date The WHO declared a pandemic.
 ```{r}
 initial_clean_data %>% 
+  #filter(ID==125)
   group_by(week) %>%  #note in figure that it is grouped by week
   tally() %>% 
   ggplot(aes(x = as.Date(week), y = n)) +
@@ -187,7 +188,8 @@ Look through and see if there is anything weird (very few sentences in an articl
 ```{r}
 article_sentences <- data_sentences %>% 
   group_by(ID) %>% 
-  tally()
+  tally() %>% 
+  arrange(desc(n))
 
 article_sentences
 ```
@@ -212,7 +214,8 @@ Descriptive statistics for number of words per article
 words_per_article<-initial_clean_data %>%
   select(ID, Text_Content) %>% 
   unnest_tokens("word",Text_Content) %>% 
-  count(ID)
+  count(ID) %>% 
+  arrange(n)
 
 words_per_article
 
@@ -231,24 +234,24 @@ words_per_article %>%  summarise(mean = mean(n),
 
 BONUS: Twenge and Orben mentions
 ```{r}
-initial_clean_data %>% 
-  filter(grepl("Orben", Text_Content)) %>% 
-  filter(!grepl("Twenge", Text_Content)) %>% 
-  count("ID")
-
-initial_clean_data %>% 
-  filter(grepl("Twenge", Text_Content))%>% 
-  filter(!grepl("Orben", Text_Content)) %>% 
-  count("ID")
-
-initial_clean_data %>% 
-  filter(grepl("Przybylski", Text_Content)) %>% 
-  count("ID")
-
-initial_clean_data %>% 
-  filter(grepl("Twenge", Text_Content)) %>% 
-  filter(grepl("Orben", Text_Content)) %>% 
-  count("ID")
+# initial_clean_data %>% 
+#   filter(grepl("Orben", Text_Content)) %>% 
+#   filter(!grepl("Twenge", Text_Content)) %>% 
+#   count("ID")
+# 
+# initial_clean_data %>% 
+#   filter(grepl("Twenge", Text_Content))%>% 
+#   filter(!grepl("Orben", Text_Content)) %>% 
+#   count("ID")
+# 
+# initial_clean_data %>% 
+#   filter(grepl("Przybylski", Text_Content)) %>% 
+#   count("ID")
+# 
+# initial_clean_data %>% 
+#   filter(grepl("Twenge", Text_Content)) %>% 
+#   filter(grepl("Orben", Text_Content)) %>% 
+#   count("ID")
 
 ```
 
@@ -795,6 +798,7 @@ Identify the 2 topics most associated with a given document (article).
 data_topics_and_sentiment <- data_with_gamma_details %>% 
   group_by(ID) %>% 
   slice_max(gamma, n = 2) %>%
+ # filter(ID==1 | ID==5) %>% 
   ungroup()
 
 data_topics_and_sentiment
@@ -848,6 +852,8 @@ data_topics_with_sentiment %>%
   theme_minimal()+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
+
+#ggsave("topics_with_sentiment.pdf", width=10, dpi=500)
 ```
 
 #Outlook cateogory
@@ -890,7 +896,7 @@ guides(fill = guide_legend(nrow = 3)) +
 plot_annotation(tag_levels = 'A')
 
 p3
-ggsave("sentiment_per_website_category.pdf", width=10,height = 6, dpi=500)
+#ggsave("sentiment_per_website_category.pdf", width=10,height = 6, dpi=500)
 ```
 
 ```{r}
@@ -1049,7 +1055,7 @@ data_topics_with_sentiment %>%
 select("ID","topic","gamma","normalised_gamma","ave_sentiment","Author","Outlet_Name", "Title","topic_sentiment") %>%
 group_by(ID) %>%
 slice_max(gamma, n = 1) %>%
-ungroup() %>% filter(topic==7) %>% arrange(desc(gamma))
+ungroup() %>% filter(topic==13) %>% arrange(desc(gamma))
 
 ```
 
@@ -1064,18 +1070,18 @@ data_topics_with_sentiment %>%
   group_by(ID) %>% 
   slice_max(gamma, n = 1) %>%
   select("ID","topic","gamma","ave_sentiment","Author","Outlet_Name", "topic_sentiment") %>% 
-  filter(topic==7) %>% 
+  filter(topic==3) %>% 
   group_by(Outlet_Name) %>% 
-  summarise(n = n()) %>% 
-  arrange(desc(n)) %>% 
+  summarise(ave_topic_sentiment= ave(topic_sentiment)) %>%
+
   left_join(data_topics_with_sentiment %>% 
-  group_by(ID) %>% 
-  slice_max(gamma, n = 1) %>%
-  filter(topic==7) %>% 
-  ungroup() %>% 
+            group_by(ID) %>% 
+            slice_max(gamma, n = 1) %>%
+  filter(topic==3) %>% 
   group_by(Outlet_Name) %>% 
-  mutate(ave_topic_sentiment= ave(topic_sentiment)) %>% slice(Outlet_Name, n=1) %>%
-  select("Outlet_Name", "ave_topic_sentiment"), by="Outlet_Name") %>% 
+  summarise(n=n()), by="Outlet_Name") %>% 
+  ungroup() %>% 
+  distinct(Outlet_Name, .keep_all= TRUE) %>% 
   arrange(desc(n))
   
 
