@@ -147,14 +147,14 @@ initial_clean_data %>%
   group_by(week) %>%  #note in figure that it is grouped by week
   tally() %>% 
   ggplot(aes(x = as.Date(week), y = n)) +
-  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4, color="orange")+
+  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4, color="#336666")+
+  geom_text(aes(as.Date("2020-03-10"),13, label = "2020-03-11", vjust = -2))+
   geom_hline(yintercept=4.396, linetype=4)+
   geom_line(size=1, colour="black") +
   scale_x_date(labels = date_format("%m-%Y"))+
   labs(x = "Date", y = "Number of published articles",
        title = "")+
   theme_classic(base_size = 20)
-
 ggsave("article_numbers_over_time.png", width=10,height = 5, dpi=500)
 ```
 
@@ -267,6 +267,7 @@ articles_with_sentiment <- initial_clean_data %>%
                n.before = 3, n.after = 3,
                question.weight = 0,
                neutral.nonverb.like = TRUE)
+
 articles_with_sentiment
 ```
 
@@ -292,8 +293,6 @@ articles_title_with_sentiment <- initial_clean_data %>%
                n.before = 3, n.after = 3,
                question.weight = 0,
                neutral.nonverb.like = TRUE)
-
-
 articles_title_with_sentiment %>% add_column(type="title") %>% 
   rbind(articles_with_sentiment%>% add_column(type="body")) %>% 
   ggplot(aes(x=ave_sentiment, color=type))+
@@ -302,7 +301,6 @@ articles_title_with_sentiment %>% add_column(type="title") %>%
   labs(x = "Average sentiment", y = "Density", color="")+
   theme_classic(base_size = 20)
   #theme(legend.position="bottom")
-
 #ggsave("article_body_vs_title_sentiment.png", width=10, dpi=500)
 ```
 
@@ -393,9 +391,7 @@ p2<-data_with_sentiment %>%
     panel.grid.minor.x = element_blank()
   )
 p1+p2+plot_annotation(tag_levels = 'A')
-
-#ggsave("sentiment_boxplot_with_zoom.png", width=14, height=7, dpi=500)
-
+ggsave("sentiment_boxplot_with_zoom.png", width=15, height=8, dpi=500)
 ```
 
 ## Descriptive analysis of sentiment by data published
@@ -406,7 +402,7 @@ data_with_sentiment %>% select(website_category, ave_sentiment, week) %>%
   summarise(mean_sentiment = mean(ave_sentiment)) %>% 
   mutate(line_color = mean_sentiment < 0) %>% 
   ggplot(mapping = aes(x = week, y = mean_sentiment)) +
-  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")),color="orange", linetype=4)+
+  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4, color="#336666")+
   geom_hline(yintercept = 0.090, linetype=4)+
   #geom_line() +
   geom_link2(aes(colour = after_stat(ifelse(y > 0, "positve", "negative"))),size=1)+
@@ -416,8 +412,9 @@ data_with_sentiment %>% select(website_category, ave_sentiment, week) %>%
        color = "Sentiment")+
   theme_classic(base_size = 18)+
   theme(legend.position="bottom")
-
 #ggsave("Mean_sentiment_per_week.png", width=14, height=8, dpi=500)
+
+```
 
 ```{r}
 data_with_sentiment_facet<-data_with_sentiment %>% select(website_category, ave_sentiment, week) %>% 
@@ -573,7 +570,7 @@ body_vs_title_sentiment
 summarise(body_vs_title_sentiment, Average = mean(diff, na.rm = T))
 ```
 
-Sentiment difference by website category
+#Descriptive statistics: Sentiment difference by website category
 ```{r}
 body_vs_title_sentiment %>% left_join(data_with_sentiment, by="ID") %>% 
   group_by(website_category) %>% 
@@ -585,6 +582,7 @@ body_vs_title_sentiment %>% left_join(data_with_sentiment, by="ID") %>%
               title_sd = sd(ave_sentiment.y),
               ave_diff = mean(diff)) %>% 
   arrange(ave_diff)
+  
 
 ```
 
@@ -817,6 +815,8 @@ data_topics_with_sentiment %>%
 
 ```{r}
 data_topics_with_sentiment %>% 
+  group_by(ID) %>% 
+ # slice_max(gamma,n=1) %>% 
   group_by(topic) %>% 
   summarise(n = n(),
             mean = round(mean(topic_sentiment), 3),
@@ -824,22 +824,32 @@ data_topics_with_sentiment %>%
             median = round(median(topic_sentiment),3),
             min = round(min(topic_sentiment),3),
             max = round(max(topic_sentiment),3)) %>% 
-  arrange(median)
+  arrange(topic)
 ```
 
 ```{r}
 data_topics_with_sentiment %>% 
   mutate(topic = as.factor(topic)) %>% 
+  # group_by(ID) %>% 
+  # slice_max(gamma,n=1) %>% 
+  # group_by(topic) %>% 
+  # #mutate(topic = as.factor(topic)) %>% 
+  # mutate(ave_topic_sentiment=ave(topic_sentiment)) %>% 
+  # ungroup() %>% 
+  # group_by(topic) %>% 
+  # distinct(topic, .keep_all= TRUE) %>% 
+  # select(topic, ave_topic_sentiment) %>% 
+  # arrange(ave_topic_sentiment)
   ggplot(aes(x = fct_reorder(topic, topic_sentiment, .fun = median), y = topic_sentiment)) +
   geom_hline(yintercept=0, linetype=4)+
-  geom_boxplot(fill="lightyellow1") +
+  geom_boxplot(fill="#9DE4E7") +
   coord_flip() +
   labs(x = "Topic", y = "Sentiment", title = "Topic sentiment values", subtitle = "")+
-  theme_minimal()+
+  theme_classic(base_size = 15)+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
 
-#ggsave("topics_with_sentiment.pdf", width=10, dpi=500)
+#ggsave("topics_with_sentiment.png", width=10, dpi=500)
 ```
 
 #Outlook cateogory
@@ -847,21 +857,21 @@ data_topics_with_sentiment %>%
 ```{r}
 data_topics_with_labels<-data_topics_with_sentiment
 
-data_topics_with_labels$topic[data_topics_with_labels$topic == "1"] <- "Skill development"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "2"] <- "Education"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "1"] <- "Technology skill development"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "2"] <- "Increased screen time due to remote learning"
 data_topics_with_labels$topic[data_topics_with_labels$topic == "3"] <- "Parental concerns"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "4"] <- "General tech use"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "5"] <- "Gaming"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "6"] <- "Increased screentime"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "4"] <- "Support and guidance for parents"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "5"] <- "Gaming concerns"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "6"] <- "Perspectives on coping with screen time"
 data_topics_with_labels$topic[data_topics_with_labels$topic == "7"] <- "Regulatory applications"
 data_topics_with_labels$topic[data_topics_with_labels$topic == "8"] <- "Eye health"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "9"] <- "Social media effects on mental health"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "9"] <- "Social media and mental health in adolescents"
 data_topics_with_labels$topic[data_topics_with_labels$topic == "10"] <- "Mobile screentime effects"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "11"] <- "Screens and sedentary lifestyles"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "12"] <- "Screentime and literacy"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "13"] <- "SciComm"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "14"] <- "Cognitive development/ sleep"
-data_topics_with_labels$topic[data_topics_with_labels$topic == "15"] <- "Government interventions"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "11"] <- "Sedentary lifestyle"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "12"] <- "Impact of screen time on literacy"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "13"] <- "Communicating research findings with the public"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "14"] <- "Cognitive development and sleep"
+data_topics_with_labels$topic[data_topics_with_labels$topic == "15"] <- "Government's role in screen time policy"
 
 
 p3<-data_topics_with_labels %>%
@@ -872,7 +882,7 @@ geom_hline(yintercept=0, linetype=4)+
 geom_boxplot() +
 coord_flip() +
 labs(x = "", y = "Sentiment", subtitle = "Website Category")+
-theme_minimal()+
+theme_classic(base_size = 20)+
 theme(panel.grid.major.x = element_blank(),
 legend.position = "bottom",
 legend.title = element_blank(),
@@ -897,7 +907,7 @@ geom_hline(yintercept=0, linetype=4)+
 geom_boxplot() +
 coord_flip() +
 labs(x = "", y = "Sentiment", subtitle = "Popular News Media")+
-theme_minimal()+
+theme_classic(base_size = 20)+
 theme(panel.grid.major.x = element_blank(),
 legend.position = "bottom",
 legend.title = element_blank(),
@@ -908,7 +918,7 @@ scale_fill_brewer(palette="Set3")+
 plot_annotation(tag_levels = 'B')
 
 p3p4<-p3+p4
-#ggsave("sentiment_per_category_per_popular_site.pdf", widt=20, dpi=500)
+#ggsave("sentiment_per_topic_patchwork.png", width=20, height=15, dpi=500)
 
 p3p4
 
@@ -919,18 +929,20 @@ p3p4
 #Topic timeline
 
 ```{r}
-data_with_gamma_details%>% 
-  group_by(ID) %>% 
-  slice_max(gamma,n=1) %>% #or should it be top 1 terms?
-  ggplot(mapping = aes(x = week)) +
-   geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4)+
-  geom_bar(aes(fill= factor(topic)))+  #can also use geom_point
-   theme_minimal()+
-  labs(x = "week", y = "count", title = "Prevailing article topics over time", subtitle = "All categories")+
-  #scale_fill_brewer(palette="BuPu")+
-  facet_wrap(~topic)
 
-#ggsave("prevailing_article_topics_over_time.pdf", width=10, dpi=500)
+data_topics_with_labels%>% 
+  group_by(ID) %>% 
+  slice_max(gamma,n=1) %>% #or should it be top 2 terms
+  ggplot(mapping = aes(as.Date(week))) +
+   geom_vline(xintercept = (as.Date("2020-03-11")), linetype=4)+
+  geom_bar(aes(fill= factor(topic)))+  #can also use geom_point
+  labs(x = "week", y = "count", subtitle = "All website categories")+
+  theme_classic(base_size = 12)+
+  theme(legend.position = "none")+
+  facet_wrap(~topic, ncol=5, labeller = labeller(topic = label_wrap_gen(25)))
+
+
+#ggsave("prevailing_article_topics_over_time.png", width=10,height = 6, dpi=500)
 
 ```
 
@@ -1069,6 +1081,18 @@ data_topics_with_sentiment %>%
   ungroup() %>% 
   distinct(Outlet_Name, .keep_all= TRUE) %>% 
   arrange(desc(n))
-  
 
+
+
+```
+
+#Mean sentiment (and SD) of weekly mean sentiment
+```{r}
+
+data_with_sentiment %>% select(website_category, ave_sentiment, week) %>% 
+  group_by(week) %>%  
+  summarise(mean_sentiment = mean(ave_sentiment)) %>%
+  select(mean_sentiment) %>% 
+  summarise(m_sentiment = mean(mean_sentiment),
+            sd=sd(mean_sentiment))
 ```
