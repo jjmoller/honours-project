@@ -1,4 +1,4 @@
----
+--
 title: "Screen time reporting text analysis"
 author: "Douglas A. Parry"
 output: html_notebook
@@ -19,17 +19,13 @@ It is recommended that this file be downloaded and viewed in RStudio to view the
 rm(list = ls())
 options(scipen = 999)
 set.seed(42)
-
 # load packages
-
 if (!require("pacman")) install.packages("pacman");
 library(pacman)
 pacman::p_load(tidyverse, dplyr, ggplot2, ggforce, tidytext, textdata, tokenizers, stringr, readxl, 
                forcats, tm, topicmodels, lubridate, ldatuning, sentimentr, textclean,
                PupillometryR, scales, udpipe, patchwork)
-
 # Create expected directory structure:
-
 wd <- getwd()
 if (!dir.exists("data_clean")) {dir.create(file.path(wd, "data_clean"))}
 if (!dir.exists("data_raw")) {dir.create(file.path(wd, "data_raw"))}
@@ -76,12 +72,10 @@ initial_clean_data <- initial_clean_data %>%
          Text_Content = gsub(x = Text_Content, 
                              pattern = "screen time", 
                              replacement = "screentime"))
-
 initial_clean_data <- initial_clean_data %>% 
   mutate(Date_Published = ymd(Date_Published), #frm lubridate  #changed to ymd - juan
          week = floor_date(Date_Published, "week"),
          year = year(Date_Published))
-
 saveRDS(initial_clean_data, "data_clean/clean_data_1.rds")
 ```
 
@@ -99,7 +93,6 @@ group_by(year) %>%
 # split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
 tally(sort=TRUE) %>%
 mutate(freq = round((n / sum(n)) * 100,2))
-
 ```
 
 Number of articles before WHO announcement vs after announcement
@@ -110,15 +103,12 @@ group_by(year) %>%
 #split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
 tally(sort=TRUE) %>%
 mutate(total = (sum(n)))
-
-
 initial_clean_data %>%
 filter(Date_Published>as.Date("2020-03-10")) %>%
 group_by(year) %>%
 # split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
 tally(sort=TRUE) %>%
 mutate(total = (sum(n)))
-
 ```
 
 Number of articles included by website category
@@ -128,9 +118,6 @@ initial_clean_data %>%
  # split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>% 
   tally(sort=TRUE) %>% 
   mutate(freq = round((n / sum(n)) * 100,2))
-
-
-
 ```
 
 Average number of articles per media house
@@ -140,7 +127,6 @@ outlet_count <- initial_clean_data %>%
  # split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>% 
   tally(sort=TRUE) %>% 
   mutate(freq = round((n / sum(n)) * 100,2))
-
 outlet_count
 ```
 
@@ -152,7 +138,6 @@ outlet_count %>%  summarise(mean = mean(n),
             median = median(n),
             min = min(n),
             max = max(n))
-
 ```
 
 Visualisation of number of articles over time, with a dotted line at the date The WHO declared a pandemic.
@@ -162,12 +147,15 @@ initial_clean_data %>%
   group_by(week) %>%  #note in figure that it is grouped by week
   tally() %>% 
   ggplot(aes(x = as.Date(week), y = n)) +
-  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4)+
-  geom_line() +
+  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4, color="orange")+
+  geom_hline(yintercept=4.396, linetype=4)+
+  geom_line(size=1, colour="black") +
   scale_x_date(labels = date_format("%m-%Y"))+
   labs(x = "Date", y = "Number of published articles",
-       title = "Number of published articles per week")+
-  theme_minimal()
+       title = "")+
+  theme_classic(base_size = 20)
+
+ggsave("article_numbers_over_time.png", width=10,height = 5, dpi=500)
 ```
 
 ############## Section 3: Sentiment Analysis ############## 
@@ -190,7 +178,6 @@ article_sentences <- data_sentences %>%
   group_by(ID) %>% 
   tally() %>% 
   arrange(desc(n))
-
 article_sentences
 ```
 ### Descriptive statistics for number of sentences
@@ -216,20 +203,16 @@ words_per_article<-initial_clean_data %>%
   unnest_tokens("word",Text_Content) %>% 
   count(ID) %>% 
   arrange(n)
-
 words_per_article
-
 ```
 
 Descriptive statistics for words per article
 ```{r}
-
 words_per_article %>%  summarise(mean = mean(n),
             sd = sd(n),
             median = median(n),
             min = min(n),
             max = max(n))
-
 ```
 
 BONUS: Twenge and Orben mentions
@@ -252,7 +235,6 @@ BONUS: Twenge and Orben mentions
 #   filter(grepl("Twenge", Text_Content)) %>% 
 #   filter(grepl("Orben", Text_Content)) %>% 
 #   count("ID")
-
 ```
 
 
@@ -285,7 +267,6 @@ articles_with_sentiment <- initial_clean_data %>%
                n.before = 3, n.after = 3,
                question.weight = 0,
                neutral.nonverb.like = TRUE)
-
 articles_with_sentiment
 ```
 
@@ -312,13 +293,17 @@ articles_title_with_sentiment <- initial_clean_data %>%
                question.weight = 0,
                neutral.nonverb.like = TRUE)
 
-articles_title_with_sentiment 
 
-articles_title_with_sentiment %>% 
-  ggplot(aes(x = ave_sentiment))+
-  geom_density() + 
-  theme_minimal()
+articles_title_with_sentiment %>% add_column(type="title") %>% 
+  rbind(articles_with_sentiment%>% add_column(type="body")) %>% 
+  ggplot(aes(x=ave_sentiment, color=type))+
+  geom_density(size=1) + 
+  geom_vline(xintercept=0, linetype=4)+
+  labs(x = "Average sentiment", y = "Density", color="")+
+  theme_classic(base_size = 20)
+  #theme(legend.position="bottom")
 
+#ggsave("article_body_vs_title_sentiment.png", width=10, dpi=500)
 ```
 
 
@@ -328,7 +313,6 @@ articles_title_with_sentiment %>%
 data_with_sentiment <- articles_with_sentiment %>% 
   left_join(initial_clean_data, by = c("by" = "ID")) %>% 
   rename(ID = by)
-
 data_with_sentiment
 ```
 ## Descriptive analysis of sentiment by (either outlet or outlet category)
@@ -341,9 +325,7 @@ data_with_sentiment_summary<-data_with_sentiment %>%
             min = min(ave_sentiment),
             max = max(ave_sentiment),
             n = n())
-
 data_with_sentiment_summary
-
 ```
 
 Top 5 positive and negative outlets by published article sentiment
@@ -363,7 +345,6 @@ arrange(desc(mean)) %>%
 Only plots for those outlets with 4 or more articles included
 
 ```{r}
-
 p1<-data_with_sentiment %>% 
   group_by(Outlet_Name) %>% 
   add_count(Outlet_Name) %>% 
@@ -372,14 +353,14 @@ p1<-data_with_sentiment %>%
   geom_boxplot(width = .4, 
                guides = FALSE, 
                outlier.shape = NA,
-               fill="peachpuff1") +
+               fill="#9DE4E7") +
   geom_point(aes(y = ave_sentiment), 
              position = position_jitter(width = .1), 
              size = 1, alpha = 0.5) + 
   guides(fill = "none") +
   labs(x = "", y = "Sentiment", title = "", subtitle = "Website categories")+
   coord_flip()+
-  theme_minimal() +
+  theme_classic(base_size = 15) +
   theme(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank()
@@ -399,19 +380,22 @@ p2<-data_with_sentiment %>%
   geom_boxplot(width = .4, 
                guides = FALSE, 
                outlier.shape = NA,
-               fill="peachpuff1") +
+               fill="#9DE4E7") +
   geom_point(aes(y = ave_sentiment), 
              position = position_jitter(width = .1), 
              size = 1, alpha = 0.5) + 
   guides(fill = "none") +
   labs(x = "", y = "Sentiment", title = "", subtitle = "Popular news media outlets")+
   coord_flip()+
-  theme_minimal() +
+  theme_classic(base_size=15) +
   theme(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank()
   )
 p1+p2+plot_annotation(tag_levels = 'A')
+
+#ggsave("sentiment_boxplot_with_zoom.png", width=14, height=7, dpi=500)
+
 ```
 
 ## Descriptive analysis of sentiment by data published
@@ -422,16 +406,18 @@ data_with_sentiment %>% select(website_category, ave_sentiment, week) %>%
   summarise(mean_sentiment = mean(ave_sentiment)) %>% 
   mutate(line_color = mean_sentiment < 0) %>% 
   ggplot(mapping = aes(x = week, y = mean_sentiment)) +
-  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4)+
+  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")),color="orange", linetype=4)+
+  geom_hline(yintercept = 0.090, linetype=4)+
   #geom_line() +
-  geom_link2(aes(colour = after_stat(ifelse(y > 0, "positve", "negative"))))+
+  geom_link2(aes(colour = after_stat(ifelse(y > 0, "positve", "negative"))),size=1)+
   scale_x_date(labels = date_format("%m-%Y"))+
   labs(x = "Date", y = "Mean sentiment",
-       title = "Mean sentiment of articles per week", 
+       #title = "Mean sentiment of articles per week", 
        color = "Sentiment")+
-  theme_minimal()
+  theme_classic(base_size = 18)+
+  theme(legend.position="bottom")
 
-```
+#ggsave("Mean_sentiment_per_week.png", width=14, height=8, dpi=500)
 
 ```{r}
 data_with_sentiment_facet<-data_with_sentiment %>% select(website_category, ave_sentiment, week) %>% 
