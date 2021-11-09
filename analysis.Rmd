@@ -1,4 +1,4 @@
---
+---
 title: "Screen time reporting text analysis"
 author: "Douglas A. Parry"
 output: html_notebook
@@ -267,7 +267,6 @@ articles_with_sentiment <- initial_clean_data %>%
                n.before = 3, n.after = 3,
                question.weight = 0,
                neutral.nonverb.like = TRUE)
-
 articles_with_sentiment
 ```
 
@@ -402,7 +401,8 @@ data_with_sentiment %>% select(website_category, ave_sentiment, week) %>%
   summarise(mean_sentiment = mean(ave_sentiment)) %>% 
   mutate(line_color = mean_sentiment < 0) %>% 
   ggplot(mapping = aes(x = week, y = mean_sentiment)) +
-  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4, color="#336666")+
+  geom_vline(xintercept = as.numeric(as.Date("2020-03-11")), linetype=4, color="black")+
+  geom_text(aes(as.Date("2020-03-10"),0, label = "2020-03-11",vjust=-39))+
   geom_hline(yintercept = 0.090, linetype=4)+
   #geom_line() +
   geom_link2(aes(colour = after_stat(ifelse(y > 0, "positve", "negative"))),size=1)+
@@ -412,8 +412,7 @@ data_with_sentiment %>% select(website_category, ave_sentiment, week) %>%
        color = "Sentiment")+
   theme_classic(base_size = 18)+
   theme(legend.position="bottom")
-#ggsave("Mean_sentiment_per_week.png", width=14, height=8, dpi=500)
-
+ggsave("Mean_sentiment_per_week.png", width=14, height=8, dpi=500)
 ```
 
 ```{r}
@@ -421,16 +420,13 @@ data_with_sentiment_facet<-data_with_sentiment %>% select(website_category, ave_
   group_by(week) %>%  
   summarise(mean_sentiment = mean(ave_sentiment)) %>% 
   left_join(data_with_sentiment, by = "week") 
-
  
   data_with_sentiment_facet %>% 
   mutate(line_color = mean_sentiment < 0) %>% 
   ggplot(mapping = aes(x = Date_Published, y = mean_sentiment)) +
   geom_link2(aes(colour = after_stat(ifelse(y > 0, "positve", "negative"))))+
   facet_wrap(~website_category)
-
 data_with_sentiment_facet
-
 ```
 Sentiment analysis: Articles mentioning Twenge vs Orben
 
@@ -438,25 +434,17 @@ Sentiment analysis: Articles mentioning Twenge vs Orben
 data_with_sentiment_orben<-data_with_sentiment %>% 
   filter(grepl("Orben", Text_Content)) %>% 
   filter(!grepl("Twenge", Text_Content))
-
  mean(data_with_sentiment_orben$ave_sentiment)
-
 data_with_sentiment_twenge<-data_with_sentiment %>% 
   filter(grepl("Twenge", Text_Content))%>% 
   filter(!grepl("Orben", Text_Content))
-
  mean(data_with_sentiment_twenge$ave_sentiment)
-
-
 #initial_clean_data_przy<-data_with_sentiment %>% 
 #  filter(grepl("Przybylski", Text_Content))
-
 data_with_sentiment_orbentwenge<-data_with_sentiment %>% 
   filter(grepl("Twenge", Text_Content)) %>% 
   filter(grepl("Orben", Text_Content))
-
  mean(data_with_sentiment_orbentwenge$ave_sentiment)
-
 ```
 
 Can also consider the proportion of negative, neutral, and positive sentences in an article (i.e., run sentiment by sentence but don't aggregate, do that manually and set thresholds for neg/neutral/pos)
@@ -466,7 +454,6 @@ Can also consider the proportion of negative, neutral, and positive sentences in
 sentences <- initial_clean_data %>%
   get_sentences(.$Text_Content) %>% 
   rowid_to_column("sentence_num")
-
 sentence_level_sentiment_with_data <- initial_clean_data %>%
   get_sentences(.$Text_Content) %>% 
   rowid_to_column("sentence_num") %>% 
@@ -478,7 +465,6 @@ sentence_level_sentiment_with_data <- initial_clean_data %>%
                question.weight = 0,
                neutral.nonverb.like = TRUE) %>% 
   left_join(sentences, by =c("by" = "sentence_num"))
-
 sentence_level_sentiment_with_data
 ```
 
@@ -565,7 +551,6 @@ body_vs_title_sentiment<-articles_with_sentiment %>%
   filter(ave_sentiment.x<0 & ave_sentiment.y>=0)) %>% 
   rename(ID = by) %>% 
   arrange(ID)
-
 body_vs_title_sentiment
 summarise(body_vs_title_sentiment, Average = mean(diff, na.rm = T))
 ```
@@ -583,7 +568,6 @@ body_vs_title_sentiment %>% left_join(data_with_sentiment, by="ID") %>%
               ave_diff = mean(diff)) %>% 
   arrange(ave_diff)
   
-
 ```
 
 
@@ -618,7 +602,6 @@ data_with_sentiment_tokenised <- as.data.frame(udpipe_annotate(english_language_
                                                              tagger = c("default", "none"),
                                                              parser = "none",
                                                              trace=TRUE))
-
 data_with_sentiment_tokenised
 ```
 
@@ -784,7 +767,6 @@ data_topics_and_sentiment <- data_with_gamma_details %>%
   slice_max(gamma, n = 2) %>%
  # filter(ID==1 | ID==5) %>% 
   ungroup()
-
 data_topics_and_sentiment
 ```
 ############## Section 5: Topic-Sentiment ############## 
@@ -848,7 +830,6 @@ data_topics_with_sentiment %>%
   theme_classic(base_size = 15)+
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
-
 #ggsave("topics_with_sentiment.png", width=10, dpi=500)
 ```
 
@@ -856,7 +837,6 @@ data_topics_with_sentiment %>%
 
 ```{r}
 data_topics_with_labels<-data_topics_with_sentiment
-
 data_topics_with_labels$topic[data_topics_with_labels$topic == "1"] <- "Technology skill development"
 data_topics_with_labels$topic[data_topics_with_labels$topic == "2"] <- "Increased screen time due to remote learning"
 data_topics_with_labels$topic[data_topics_with_labels$topic == "3"] <- "Parental concerns"
@@ -872,8 +852,6 @@ data_topics_with_labels$topic[data_topics_with_labels$topic == "12"] <- "Impact 
 data_topics_with_labels$topic[data_topics_with_labels$topic == "13"] <- "Communicating research findings with the public"
 data_topics_with_labels$topic[data_topics_with_labels$topic == "14"] <- "Cognitive development and sleep"
 data_topics_with_labels$topic[data_topics_with_labels$topic == "15"] <- "Government's role in screen time policy"
-
-
 p3<-data_topics_with_labels %>%
 arrange(topic) %>% 
 mutate(topic = as.factor(topic)) %>%
@@ -890,7 +868,6 @@ panel.grid.minor.x = element_blank()) +
 guides(fill = guide_legend(nrow = 3)) +
   scale_fill_brewer(palette="Set2")+
 plot_annotation(tag_levels = 'A')
-
 p3
 #ggsave("sentiment_per_website_category.pdf", width=10,height = 6, dpi=500)
 ```
@@ -916,12 +893,9 @@ panel.grid.minor.x = element_blank()) +
 guides(fill = guide_legend(nrow = 3)) +
 scale_fill_brewer(palette="Set3")+
 plot_annotation(tag_levels = 'B')
-
 p3p4<-p3+p4
 #ggsave("sentiment_per_topic_patchwork.png", width=20, height=15, dpi=500)
-
 p3p4
-
 ```
 
 
@@ -929,7 +903,6 @@ p3p4
 #Topic timeline
 
 ```{r}
-
 data_topics_with_labels%>% 
   group_by(ID) %>% 
   slice_max(gamma,n=1) %>% #or should it be top 2 terms
@@ -939,11 +912,9 @@ data_topics_with_labels%>%
   labs(x = "week", y = "count", subtitle = "All website categories")+
   theme_classic(base_size = 12)+
   theme(legend.position = "none")+
+  theme(axis.text.x = element_text(angle = 45, vjust=0.5))+
   facet_wrap(~topic, ncol=5, labeller = labeller(topic = label_wrap_gen(25)))
-
-
-#ggsave("prevailing_article_topics_over_time.png", width=10,height = 6, dpi=500)
-
+ggsave("prevailing_article_topics_over_time.png", width=10,height = 6, dpi=500)
 ```
 
 
@@ -958,7 +929,6 @@ sentence_level_sentiment_with_data_counts <- sentence_level_sentiment_with_data 
   summarise(n_pos = mean(pos),
             n_neg = mean(neg),
             diff = mean(diff))
-
 data_with_gamma_with_sentence_sentiment_count <- data_documents %>% 
   mutate(document = as.integer(document)) %>% 
   left_join(sentence_level_sentiment_with_data_counts, by = c("document" = "ID")) %>% 
@@ -966,7 +936,6 @@ data_with_gamma_with_sentence_sentiment_count <- data_documents %>%
    group_by(ID) %>% 
   slice_max(gamma, n = 1) %>%
   ungroup()
-
 data_with_gamma_with_sentence_sentiment_count
 ```
 
@@ -1005,18 +974,12 @@ group_by(topic) %>%
 # split(initial_clean_data$Date_Published<as.Date("2020-03-11")) %>%
 tally(sort=TRUE) %>%
 mutate(freq = round((n / sum(n)) * 100,2))
-outlet_topic_count
-
-
 
 top <- outlet_topic_count %>% arrange(desc(freq)) %>%
 slice(1:5)
 bot <- outlet_topic_count %>% arrange(freq)%>%
 slice(1:5)
 outlet_topic_count<- rbind(top, bot)
-
-
-
 outlet_topic_count
 ```
 
@@ -1026,20 +989,17 @@ data_topics_and_sentiment <- data_with_gamma_details %>%
   group_by(ID) %>% 
   slice_max(gamma, n = 1) %>%  #most popular topic per document
   ungroup()
-
 outlet_topic_count <- data_topics_and_sentiment %>% 
   filter(website_category=="Popular news media") %>% 
 group_by(topic) %>%
 tally(sort=TRUE) %>%
 mutate(freq = round((n / sum(n)) * 100,2))
 outlet_topic_count
-
 top <- outlet_topic_count %>% arrange(desc(freq)) %>%
 slice(1:5)
 bot <- outlet_topic_count %>% arrange(freq)%>%
 slice(1:5)
 outlet_topic_count<- rbind(top, bot)
-
 outlet_topic_count
 ```
 
@@ -1048,13 +1008,11 @@ outlet_topic_count
 
 per article, topic and average article sentiment with topic_sentiment
 ```{r}
-
 data_topics_with_sentiment %>%
 select("ID","topic","gamma","normalised_gamma","ave_sentiment","Author","Outlet_Name", "Title","topic_sentiment") %>%
 group_by(ID) %>%
 slice_max(gamma, n = 1) %>%
 ungroup() %>% filter(topic==13) %>% arrange(desc(gamma))
-
 ```
 
 #Who reports on the popular topics and how do they report on 
@@ -1062,8 +1020,6 @@ ungroup() %>% filter(topic==13) %>% arrange(desc(gamma))
 Topic 15
 ```{r}
 #Select all articles where this topic has the highest gamma score. Then get the average topic sentiment for this topic per outlet. 
-
-
 data_topics_with_sentiment %>% 
   group_by(ID) %>% 
   slice_max(gamma, n = 1) %>%
@@ -1071,7 +1027,6 @@ data_topics_with_sentiment %>%
   filter(topic==3) %>% 
   group_by(Outlet_Name) %>% 
   summarise(ave_topic_sentiment= ave(topic_sentiment)) %>%
-
   left_join(data_topics_with_sentiment %>% 
             group_by(ID) %>% 
             slice_max(gamma, n = 1) %>%
@@ -1081,14 +1036,48 @@ data_topics_with_sentiment %>%
   ungroup() %>% 
   distinct(Outlet_Name, .keep_all= TRUE) %>% 
   arrange(desc(n))
-
-
-
 ```
+```{r}
+#Top and least reported on topics by website category - before and after WHO announcement
+data_topics_with_sentiment %>% 
+  filter(Date_Published>as.Date("2020-03-11")) %>% 
+  group_by(ID) %>% 
+  slice_max(gamma, n = 1) %>%
+  select("ID","topic","gamma","ave_sentiment","Author","website_category", "topic_sentiment") %>% 
+  filter(website_category=="Tech news media") %>% 
+  group_by(topic) %>% 
+  tally() %>% 
+  mutate(freq = round((n / sum(n)) * 100,2)) %>% 
+  arrange(desc(freq)) %>%
+slice(1:4)
+
+# data_topics_with_sentiment %>% 
+#   group_by(ID) %>% 
+#   slice_max(gamma, n = 1) %>%
+#   select("ID","topic","gamma","ave_sentiment","Author","website_category", "topic_sentiment") %>% 
+#   filter(website_category=="Business news media") %>% 
+#   group_by(topic) %>% 
+#   tally() %>% 
+#   mutate(freq = round((n / sum(n)) * 100,2)) %>% 
+#   arrange(freq) %>%
+# slice(1:10)
+
+
+  # summarise(ave_topic_sentiment= ave(topic_sentiment)) %>%
+  # left_join(data_topics_with_sentiment %>% 
+  #           group_by(ID) %>% 
+  #           slice_max(gamma, n = 1) %>%
+  # filter(topic==3) %>% 
+  # group_by(Outlet_Name) %>% 
+  # summarise(n=n()), by="Outlet_Name") %>% 
+  # ungroup() %>% 
+  # distinct(Outlet_Name, .keep_all= TRUE) %>% 
+  # arrange(desc(n))
+```
+
 
 #Mean sentiment (and SD) of weekly mean sentiment
 ```{r}
-
 data_with_sentiment %>% select(website_category, ave_sentiment, week) %>% 
   group_by(week) %>%  
   summarise(mean_sentiment = mean(ave_sentiment)) %>%
