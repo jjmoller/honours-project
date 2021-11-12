@@ -1085,3 +1085,57 @@ data_with_sentiment %>% select(website_category, ave_sentiment, week) %>%
   summarise(m_sentiment = mean(mean_sentiment),
             sd=sd(mean_sentiment))
 ```
+
+#Install package rstatix
+```{r}
+#install.packages('rstatix')
+#library(rstatix)
+```
+
+#Getting Article Period (Before vs After) + T_test for overall before vs after
+```{r}
+data_before <- data_with_sentiment %>% select(website_category, ave_sentiment, Date_Published, week, sd, ID) %>% 
+  filter(Date_Published < as.Date("2020-03-11")) %>%
+  mutate(period = "Before")
+
+data_after <- data_with_sentiment %>% select(website_category, ave_sentiment, Date_Published, week, sd, ID) %>% 
+  filter(Date_Published > as.Date("2020-03-11")) %>%
+  mutate(period = "After")
+
+data_split <- data_before %>%
+  rbind(data_after) %>%
+  t_test(ave_sentiment ~period)
+data_split
+```
+
+#Getting Article Period (Before vs After) + Cohens_d for overall before vs after
+```{r}
+data_before <- data_with_sentiment %>% select(website_category, ave_sentiment, Date_Published, week, sd, ID) %>% 
+  filter(Date_Published < as.Date("2020-03-11")) %>%
+  mutate(period = "Before")
+
+data_after <- data_with_sentiment %>% select(website_category, ave_sentiment, Date_Published, week, sd, ID) %>% 
+  filter(Date_Published > as.Date("2020-03-11")) %>%
+  mutate(period = "After")
+
+data_split <- data_before %>%
+  rbind(data_after) %>%
+  cohens_d(ave_sentiment ~period)
+data_split
+```
+
+#T-test for titles vs body
+```{r}
+body_vs_title_sentiment <- articles_title_with_sentiment %>% add_column(type="title") %>% 
+  rbind(articles_with_sentiment%>% add_column(type="body")) %>%
+  t_test(ave_sentiment ~ type)
+body_vs_title_sentiment
+```
+
+#Cohens_d for title vs body
+```{r}
+body_vs_title_sentiment_cohens_d <- articles_title_with_sentiment %>% add_column(type="title") %>% 
+  rbind(articles_with_sentiment%>% add_column(type="body")) %>%
+  cohens_d(ave_sentiment ~ type)
+body_vs_title_sentiment_cohens_d
+```
