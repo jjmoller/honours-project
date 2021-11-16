@@ -1183,3 +1183,26 @@ data_title_split_cohens <- data_title_before %>%
   cohens_d(ave_sentiment.y ~period)
 data_title_split_cohens
 ```
+#t-test for topics before vs after WHO
+```{r}
+data_topics_with_labels_split<-data_topics_with_sentiment %>% 
+   group_by(ID) %>% 
+   slice_max(gamma,n=1) %>% 
+   ungroup %>% 
+   filter(topic=="Gaming concerns")
+
+data_topics_with_labels_split_before <- data_topics_with_labels_split %>% 
+  filter(Date_Published < as.Date("2020-03-11")) %>% 
+  mutate(period = "Before")
+
+data_topics_with_labels_split_after <- data_topics_with_labels_split %>% 
+  filter(Date_Published > as.Date("2020-03-11")) %>% 
+  mutate(period = "After")
+
+data_topics_with_labels_split_before_and_after<-data_topics_with_labels_split_before %>%
+  rbind(data_topics_with_labels_split_after)
+
+data_topics_with_labels_split_before_and_after %>% select(topic, topic_sentiment, period) %>% 
+  t_test(topic_sentiment ~ period)
+
+```
