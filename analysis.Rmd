@@ -1139,3 +1139,47 @@ body_vs_title_sentiment_cohens_d <- articles_title_with_sentiment %>% add_column
   cohens_d(ave_sentiment ~ type)
 body_vs_title_sentiment_cohens_d
 ```
+
+#T-test for titles before vs after
+```{r}
+title_before_vs_after_sentiment <- articles_with_sentiment %>%
+  inner_join(articles_title_with_sentiment, by="by") %>%
+  rename(ID = by) %>%
+  inner_join(data_with_sentiment, by = "ID") %>%
+  select(ave_sentiment.y, Date_Published, week, sd, ID, website_category)
+
+data_title_before <- title_before_vs_after_sentiment %>% select(website_category, ave_sentiment.y, Date_Published, week, sd, ID) %>% 
+  filter(Date_Published < as.Date("2020-03-11")) %>%
+  mutate(period = "Before")
+
+data_title_after <- title_before_vs_after_sentiment %>% select(website_category, ave_sentiment.y, Date_Published, week, sd, ID) %>% 
+  filter(Date_Published > as.Date("2020-03-11")) %>%
+  mutate(period = "After")
+ 
+data_title_split <- data_title_before %>%
+  rbind(data_title_after) %>%
+  t_test(ave_sentiment.y ~period)
+data_title_split
+```
+
+#Cohens_d for titles before vs after
+```{r}
+title_before_vs_after_sentiment <- articles_with_sentiment %>%
+  inner_join(articles_title_with_sentiment, by="by") %>%
+  rename(ID = by) %>%
+  inner_join(data_with_sentiment, by = "ID") %>%
+  select(ave_sentiment.y, Date_Published, week, sd, ID, website_category)
+
+data_title_before <- title_before_vs_after_sentiment %>% select(website_category, ave_sentiment.y, Date_Published, week, sd, ID) %>% 
+  filter(Date_Published < as.Date("2020-03-11")) %>%
+  mutate(period = "Before")
+
+data_title_after <- title_before_vs_after_sentiment %>% select(website_category, ave_sentiment.y, Date_Published, week, sd, ID) %>% 
+  filter(Date_Published > as.Date("2020-03-11")) %>%
+  mutate(period = "After")
+ 
+data_title_split_cohens <- data_title_before %>%
+  rbind(data_title_after) %>%
+  cohens_d(ave_sentiment.y ~period)
+data_title_split_cohens
+```
