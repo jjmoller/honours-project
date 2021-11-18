@@ -966,7 +966,6 @@ data_topic_sentences_sentiment_count %>%
   arrange(desc(m_neg))
 ```
 
-#Dan's code
 Top 5 most and least reported on topics
 ```{r}
 outlet_topic_count <- data_with_gamma_with_sentence_sentiment_count %>%
@@ -1002,8 +1001,6 @@ slice(1:5)
 outlet_topic_count<- rbind(top, bot)
 outlet_topic_count
 ```
-
-#juan code
 
 
 per article, topic and average article sentiment with topic_sentiment
